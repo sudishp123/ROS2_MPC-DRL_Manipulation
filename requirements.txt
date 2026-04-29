@@ -19,6 +19,7 @@ ament-xmllint==0.17.4
 angles==1.16.1
 asttokens==3.0.1
 builtin-interfaces==2.0.3
+cloudpickle==3.1.2
 comm==0.2.3
 composition-interfaces==2.0.3
 control-msgs==5.7.0
@@ -41,12 +42,14 @@ examples-rclpy-minimal-publisher==0.19.7
 examples-rclpy-minimal-service==0.19.7
 examples-rclpy-minimal-subscriber==0.19.7
 executing==2.2.1
+Farama-Notifications==0.0.6
 fsspec==2026.3.0
 generate-parameter-library-py==0.6.0
 geometry-msgs==5.3.6
 glfw==2.10.0
 gps-msgs==2.1.1
 graph-msgs==0.2.0
+gymnasium==1.3.0
 image-geometry==4.1.0
 interactive-markers==2.5.5
 ipykernel==7.2.0
@@ -54,6 +57,7 @@ ipython==9.13.0
 ipython_pygments_lexers==1.1.1
 jedi==0.19.2
 -e git+ssh://git@github.com/sudishp123/ros2_ws.git@1f617029dd1654e40c7efd765bdc0e2d1b0ec063#egg=jetcobot_driver&subdirectory=build/jetcobot_driver
+Jinja2==3.1.6
 joint-state-publisher==2.4.0
 joint-state-publisher-gui==2.4.0
 jupyter_client==8.8.0
@@ -69,6 +73,7 @@ launch-yaml==3.4.10
 lifecycle-msgs==2.0.3
 logging-demo==0.33.9
 map-msgs==2.4.1
+MarkupSafe==3.0.3
 matplotlib-inline==0.2.1
 message-filters==4.11.10
 more-interfaces==0.0.0
@@ -101,6 +106,7 @@ PyOpenGL==3.1.10
 python-dateutil==2.9.0.post0
 -e git+ssh://git@github.com/sudishp123/ros2_ws.git@1f617029dd1654e40c7efd765bdc0e2d1b0ec063#egg=python_parameters&subdirectory=build/python_parameters
 python-qt-binding==2.2.2
+PyYAML==6.0.3
 pyzmq==27.1.0
 qt-dotgraph==2.7.5
 qt-gui==2.7.5
@@ -173,6 +179,7 @@ rqt-topic==1.7.5
 sensor-msgs==5.3.6
 sensor-msgs-py==5.3.6
 service-msgs==2.0.3
+setuptools==82.0.1
 shape-msgs==5.3.6
 simulation-interfaces==1.2.0
 six==1.17.0
@@ -199,6 +206,7 @@ trajectory-msgs==5.3.6
 turtlesim==1.8.3
 tutorial-interfaces==0.0.0
 type-description-interfaces==2.0.3
+typeguard==4.5.1
 typing_extensions==4.15.0
 unique-identifier-msgs==2.5.0
 urdfdom-py==1.2.1
