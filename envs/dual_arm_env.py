@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import mujoco.viewer
 import mujoco as mj
 import gymnasium as gym
@@ -54,4 +55,32 @@ class DualArmEnv(gym.Env):
             high = self.ctrl_high.astype(np.float32),
             dtype=np.float32
         )
+
+        # Observations:
+        # 12 joint positions + 12 joint velocities
+        # + left EE pos (3) + right EE pos (3)
+        # + left EE quat (4) + right EE quat (4)
+        # + object pos (3) + goal pos (3)
+
+        obs_dim = 12+12+3+3+4+4+3+3
+        self_observation_space = spaces.Box(
+            low = -np.inf, high=np.inf,
+            shape=(obs_dim,),
+            dtype=np.float32
+        )
+
+        # ---- Object/goal (add to scene.xml worldbody)
+        self.obj_body_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_BODY, "object")
+        self.goal_site_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_SITE, "goal_site")
+
+        # ----- Home position (all joints at 0) ------------
+        self.home_qpos = np.zeros(12)
+
+        # ------ Renderer ------------
+        self._viewer = None
+        self._renderer = None
+        if render_mode == "rgb_array":
+            self._renderer = mj.Renderer(self.model, height=480, width=640)
+
+
 
