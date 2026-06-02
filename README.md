@@ -1,6 +1,6 @@
 ```bashrobot_drl_nmpc/
 ├── urdf/
-│   └── robot.urdf
+│   └── jetcobot.urdf
 ├── envs/
 │   ├── __init__.py
 │   ├── robot_env.py          # Gymnasium + MuJoCo env
