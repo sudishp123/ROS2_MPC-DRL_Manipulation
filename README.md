@@ -1,4 +1,4 @@
-.
+```bash
 ├── envs
 │   └── dual_arm_env.py
 ├── requirements.txt
@@ -43,3 +43,4 @@
 │       ├── so101_old_calib.urdf
 │       └── so101_old_calib.xml
 └── scene.xml
+```
