@@ -1,0 +1,20 @@
+robot_drl_nmpc/
+├── urdf/
+│   └── robot.urdf
+├── envs/
+│   ├── __init__.py
+│   ├── robot_env.py          # Gymnasium + MuJoCo env
+│   └── reward.py             # Reward shaping
+├── mpc/
+│   ├── __init__.py
+│   ├── nmpc_controller.py    # HILO-MPC wrapper
+│   └── mpc_params.py         # Q, R, horizon defaults
+├── training/
+│   ├── train.py              # RLlib entry point
+│   └── rllib_config.py       # Algorithm + env config
+├── utils/
+│   ├── urdf_parser.py        # Extract joint info from URDF
+│   └── logging.py
+├── eval/
+│   └── evaluate.py           # Run trained policy
+└── config.yaml               # Top-level hyperparameters
