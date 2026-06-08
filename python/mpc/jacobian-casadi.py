@@ -77,7 +77,7 @@ p_e  = T_0e[:3, 3]
 
 cols = []
 for i in range(6):
-    T_at_joint = T_cum[i] @ make_T(R_fixed[i], p_fixed[i])  # ← THE FIX
+    T_at_joint = T_cum[i] @ make_T(R_fixed[i], p_fixed[i])
     z_i = T_at_joint[:3, 2]   # joint axis direction
     p_i = T_at_joint[:3, 3]   # joint origin position
 
@@ -93,4 +93,4 @@ print("J shape:", J_sym.shape)  # (6, 6)
 # Test at home position
 q_test = np.zeros(6)
 J_num  = J_fn(q_test)
-print(np.array(J_num))
+# print(np.array(J_num))
