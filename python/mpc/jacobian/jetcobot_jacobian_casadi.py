@@ -71,7 +71,6 @@ def build_kinematics():
         ca.DM([0.03197, -2.831e-05, 0.03992])
     ]
 
-
     # Full link transforms: Constant geometry @ Joint Rotation around the local Z axis
     T_links = [
         make_T(R_fixed[i], p_fixed[i]) @ make_T(Rz(q[i]), ca.DM([0,0,0]))
@@ -83,7 +82,10 @@ def build_kinematics():
     for i in range(6):
         T_cum.append(T_cum[-1] @ T_links[i])
 
-    T_0e = T_cum[6]  # end-effector
+    T_gripper = make_T(ca.DM.eye(3), ca.DM([0.06391, -5.661e-05, -0.007732]))
+    # T_camera = make_T(ca.DM.eye(3), ca.DM([0.033, 0, 0.035])) #Camera not needed to be added to the transform of the tool's end-effector matrix
+
+    T_0e = T_cum[6] @ T_gripper # end-effector
     p_e  = T_0e[:3, 3] #Rows 0-3 for Column #3 (or the first three rows of final column)
     
     cols = []
@@ -104,10 +106,10 @@ def build_kinematics():
 
 # Evaluation of build_kinematics to test whether Jacobian is correct
 
-# print("J shape:", build_kinematics()[2].shape)  # (6, 6)
+print("J shape:", build_kinematics()[2].shape)  # (6, 6)
 
-# # Test at home position
-# q_test = np.zeros(6)
-# J_num  = build_kinematics()[0](q_test)
-# p_enum = build_kinematics()[1](q_test)
-# print(np.array(p_enum))
+# Test at home position
+q_test = np.zeros(6)
+J_num  = build_kinematics()[0](q_test)
+p_enum = build_kinematics()[1](q_test)
+print(np.array(p_enum))

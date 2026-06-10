@@ -4,7 +4,7 @@ from hilo_mpc import NMPC, SimpleControlLoop
 
 class NMPCController:
     def __init__(self, model, s_diag, r_diag, horizon = 10):
-        self.nq = model.nq
+        self.nq = model.nq #Defines the mrobot's joint angles
         self.nv = model.nv
         self.nu = model.nu
         self.horizon = horizon

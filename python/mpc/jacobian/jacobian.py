@@ -6,14 +6,14 @@ robot_6dof = robot.ets(end=robot.link_dict["6_Link"])
 
 
 # Printing Robot Link and Their Characteristics
-print(robot_6dof)
+print(robot)
 
 # Define a joint configuration (e.g., all zeros = home position)
-q = np.zeros(robot_6dof.n)
+q = np.zeros(robot.n)
 
 # Compute the full geometric Jacobian
 # J = robot.jacob0(q)
 # print(J)
 
-p_e = robot_6dof.fkine(q).t
+p_e = robot.fkine(q).t
 print(p_e)
