@@ -12,8 +12,8 @@ print(robot)
 q = np.zeros(robot.n)
 
 # Compute the full geometric Jacobian
-# J = robot.jacob0(q)
-# print(J)
+J = robot.jacob0(q)
+print(J)
 
-p_e = robot.fkine(q).t
-print(p_e)
+# p_e = robot.fkine(q).t
+# print(p_e)

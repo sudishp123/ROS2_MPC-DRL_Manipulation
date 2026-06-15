@@ -104,12 +104,12 @@ def build_kinematics():
 
     return J_fn, fk_fn, J_sym, p_e, q
 
-# Evaluation of build_kinematics to test whether Jacobian is correct
+# # Evaluation of build_kinematics to test whether Jacobian is correct
 
-print("J shape:", build_kinematics()[2].shape)  # (6, 6)
+# print("J shape:", build_kinematics()[2].shape)  # (6, 6)
 
-# Test at home position
-q_test = np.zeros(6)
-J_num  = build_kinematics()[0](q_test)
-p_enum = build_kinematics()[1](q_test)
-print(np.array(p_enum))
+# # Test at home position
+# q_test = np.zeros(6)
+# J_num  = build_kinematics()[0](q_test)
+# p_enum = build_kinematics()[1](q_test)
+# print(np.array(J_num))
