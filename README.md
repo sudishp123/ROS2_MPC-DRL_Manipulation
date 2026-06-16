@@ -3,7 +3,7 @@
 │   └── jetcobot.urdf
 ├── envs/
 │   ├── __init__.py
-│   ├── robot_env.py          # Gymnasium + MuJoCo env
+│   ├── environment_rand.py   # Generating random envs for training
 │   └── reward.py             # Reward shaping
 ├── mpc/
 │   ├── __init__.py
