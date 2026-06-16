@@ -35,11 +35,22 @@ class MakeEnv:
         self.integrator = params["option_settings"]["integrator"]
         self.gravity = params["option_settings"]["gravity"]
 
-        # default settings
+        # default settings:
         self.joint_damping = params["default_settings"]["joint_damping"]
 
-        # visual settings
-        
+        # visual settings:
+        self.znear       = params["visual_settings"]["znear"]
+        self.zfar        = params["visual_settings"]["zfar"]
+        self.shadowsize  = params["visual_settings"]["shadowsize"]
+        self.framelength = params["visual_settings"]["framelength"]
+        self.framewidth  = params["visual_settings"]["framewidth"]
+        self.jointlength = params["visual_settings"]["framelength"]
+        self.jointwidth  = params["visual_settings"]["jointwidth"]
+
+        # skybox settings:
+        self.skybox_name = params["skybox_settings"]["name"]
+        self.skybox_type = mj.mjtTexture.mjTEXTURE_SKYBOX
+        self.skybox_builtin = mj.mjtBuiltin.mjBUILTIN_GRADIENT
 
 
 

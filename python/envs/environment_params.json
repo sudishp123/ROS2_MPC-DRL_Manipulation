@@ -1,0 +1,103 @@
+{
+    "env_settings" : {
+        "name" : "my_environment"
+    },
+
+    "compiler_settings" : {
+        "compiler_angle" : 1
+    },
+
+    "option_settings" : {
+        "timestep"      : 0.001,
+        "integrator"    : 2,
+        "gravity"       : [0, 0, -9.81]
+    },
+
+    "default_settings" : {
+        "joint_damping" : 0.25
+    },
+
+    "visual_settings" : {
+        "znear"         : 0.01,
+        "zfar"          : 50.0,
+        "shadowsize"    : 4096,
+        "framelength"   : 1.0,
+        "framewidth"    : 0.05,
+        "jointlength"   : 2.0,
+        "jointwidth"    : 0.05
+    },
+
+    "skybox_settings" : {
+        "name"       : "sky",
+        "rgb1"       : [1.0, 1.0, 1.0],
+        "rgb2"       : [0.6, 0.8, 1.0],
+        "width"      : 256,
+        "height"     : 256
+    },
+
+    "light_settings" : {
+        "name"        : "overhead_light",
+        "pos"         : [0, 0, 5],
+        "diffuse"     : [0.9, 0.9, 0.9],
+        "specular"    : [0, 0, 0],
+        "ambient"     : [0, 0, 0],
+        "castshadows"  : 0
+    },
+
+    "camera_settings" : {
+        "name"   : "overhead_camera",
+        "pos"    : [0, 0, 3]
+    },
+
+    "wall_settings" : {     
+        "contype"      : 1,
+        "conaffinity"  : 1,
+        "thickness"    : 0.025,
+        "height"       : 0.1
+    }, 
+
+    "ground_settings" : {
+        "name"   : "ground_plane",
+        "contype" : 1,
+        "conaffinity" : 1, 
+        "internal_length" : 4,
+        "z_spacing" : 0.1,
+        "pos" : [0, 0, 0],
+        "rgba" : [0.9, 0.9, 0.9, 1]
+    },
+
+    "agent_settings" : {
+        "name" : "agent"
+    },
+
+    "agent_mesh_settings" : {
+        "name" : "agent_mesh",
+        "file_name" : "x3_robot.stl",
+        "contype" : 1,
+        "conaffinity" : 1,
+        "euler" : [90, 0, 0],
+        "pos" : [0, 0, 0.0714]
+    },
+
+    "agent_footprint_settings" : {
+        "name" : "agent_footprint",
+        "radius" : 0.15,
+        "height" : 0.001,
+        "contype" : 0,
+        "conaffinity" : 0,
+        "rgba" : [0, 0, 1, 0.1]
+    },
+
+    "obstacle_settings" : {
+        "size_low": 0.1,
+        "size_high": 0.25,
+        "thickness" : 0.025,
+        "height": 0.1,
+        "allowance" : 0.05
+    },
+
+    "task_settings" : {
+        "radius" : 0.1,
+        "height" : 0.00999
+    }
+}
