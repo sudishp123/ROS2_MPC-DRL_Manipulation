@@ -1,22 +1,22 @@
 ```bashrobot_drl_nmpc/
-├── assets/
+├── 📂 assets/
     ├── urdf/
 │     └── jetcobot.urdf
-├── envs/
+├── 📂 envs/
 │   ├── __init__.py
-│   ├── environment_rand.py   # Generating random envs for training
-│   └── reward.py             # Reward shaping
-├── mpc/
+│   ├── env_creation.py   # Generating random envs for training
+│   └── manipulation.py   # Gymnasium Environment
+├── 📂 mpc/
 │   ├── __init__.py
 │   ├── nmpc_controller.py    # HILO-MPC wrapper
 │   └── mpc_params.py         # Q, R, horizon defaults
-├── training/
+├── 📂 training/
 │   ├── train.py              # RLlib entry point
 │   └── rllib_config.py       # Algorithm + env config
-├── utils/
+├── 📂 utils/
 │   ├── urdf_parser.py        # Extract joint info from URDF
 │   └── logging.py
-├── eval/
+├── 📂 eval/
 │   └── evaluate.py           # Run trained policy
 └── config.yaml               # Top-level hyperparameters
 ```
