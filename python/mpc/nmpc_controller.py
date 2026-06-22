@@ -53,7 +53,6 @@ class NMPCController:
             q_k    : ca.SX(6,) — joint angles at step k
             T_obs  : ca.SX(3,) — obstacle centre position
         """
-
         p_ee = ca.substitute(self.p_e_sym, self.q_kin, q_k)
         dist = ca.norm_2(p_ee - T_obs)
         r_obs = 0.15   #obstacle_raidus (m)

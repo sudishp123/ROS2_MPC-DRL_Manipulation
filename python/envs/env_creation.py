@@ -4,6 +4,35 @@ import mujoco.viewer
 import numpy as np
 import os
 
+# maps a "collision.type" string in the JSON to the corresponding MuJoCo geom enum:
+_COLLISION_GEOM_TYPE = {
+    "sphere": mj.mjtGeom.mjGEOM_SPHERE,
+    "capsule": mj.mjtGeom.mjGEOM_CAPSULE,
+    "box": mj.mjtGeom.mjGEOM_BOX,
+    "cylinder": mj.mjtGeom.mjGEOM_CYLINDER,
+}
+
+def _collision_geom_size(spec:dict) -> list:
+    """
+    Translate a JSON ``collision`` block into the ``size`` triple MuJoCo expects
+    for the given geom type. MuJoCo's size semantics differ per primitive:
+    sphere: [radius, 0, 0]
+    capsule: [radius, half_length, 0]
+    cylinder: [radius, half_length, 0]
+    box: [half_x, half_y, half_z] 
+    """
+
+    gtype = spec["type"]
+    if gtype == "sphere":
+        return [spec["radius"], 0.0, 0.0]
+    elif gtype in ("capsule", "cylinder"):
+        return [spec["radius"], spec["half_length"], 0.0]
+    elif gtype == "box":
+        return list(spec["half_extents"])
+    else:
+        return ValueError(f"Unsupported Collision geom type: {gtype}")
+
+
 # define main class for creating the environment:
 class MakeEnv:
     """
@@ -177,6 +206,24 @@ class MakeEnv:
                                      pos = self.ground_pos,
                                      size = self.ground_size,
                                      rgba = self.ground_rgba)
+        
+
+    def add_meshes(self):
+        """
+        Register all STL meshes - reads ile names from params
+        """
+        for jd in self._joint_data:
+            self.spec.add_mesh(
+                name = f"{jd['link_name']}_mesh",
+                file = jd['mesh']
+            )
+
+        for fl in self._fixed_links:
+            self.spec.add_mesh(
+                name = f"{fl['link_name']}_mesh",
+                file = fl['mesh']
+            )
+
 
     def add_robot(self, robot_pos: list):
         """

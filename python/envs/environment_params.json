@@ -75,7 +75,14 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [0.0, 0.0, 1.0],
                 "lower": -3.05,
-                "upper": 3.05
+                "upper": 3.05,
+                "collision":{
+                    "type": "capsule",
+                    "radius": 0.035,
+                    "half_length": 0.04,
+                    "pos": [0, 0, 0],
+                    "rpy": [0,0,0]
+                }
             },
             {
                 "joint_name": "2_Joint",
@@ -85,7 +92,14 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [-0.000732, -1.0, 0.0],
                 "lower": -1.57,
-                "upper": 1.57
+                "upper": 1.57,
+                "collision":{
+                    "type": "capsule",
+                    "radius": 0.035,
+                    "half_length": 0.05,
+                    "pos": [0, 0, 0.05],
+                    "rpy": [0,0,0]
+                }
             },
             {
                 "joint_name": "3_Joint",
@@ -95,7 +109,14 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [0.0, 0.0, 1.0],
                 "lower": -1.57,
-                "upper": 1.57
+                "upper": 1.57,
+                "collision":{
+                    "type": "capsule",
+                    "radius": 0.03,
+                    "half_length": 0.045,
+                    "pos": [0, 0, 0],
+                    "rpy": [0,0,0]
+                }
             },
             {
                 "joint_name": "4_Joint",
@@ -105,7 +126,14 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [0.000732, -1.0, 0.0],
                 "lower": -1.57,
-                "upper": 1.57
+                "upper": 1.57,
+                "collision":{
+                    "type": "capsule",
+                    "radius": 0.028,
+                    "half_length": 0.04,
+                    "pos": [0, 0, 0.0],
+                    "rpy": [0,0,0]
+                }
             },
             {
                 "joint_name": "5_Joint",
@@ -115,7 +143,14 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [0.0, 0.0, 1.0],
                 "lower": -3.05,
-                "upper": 3.05
+                "upper": 3.05,
+                "collision":{
+                    "type": "capsule",
+                    "radius": 0.025,
+                    "half_length": 0.03,
+                    "pos": [0, 0, 0.0],
+                    "rpy": [0,0,0]
+                }
             },
             {
                 "joint_name": "6_Joint",
@@ -125,7 +160,13 @@
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "axis": [1.0, 0.000991, 0.0],
                 "lower": -1.57,
-                "upper": 1.57
+                "upper": 1.57,
+                "collision":{
+                    "type": "sphere",
+                    "radius": 0.035,
+                    "pos": [0, 0, 0.05],
+                    "rpy": [0,0,0]
+                }
             }          
         ],
         "fixed_links":[
@@ -134,14 +175,26 @@
                 "mesh": "jiazhua_Link.STL",
                 "origin_xyz": [0.06391, -5.661e-05, -0.007732],
                 "origin_rpy": [0.0, 0.0, 0.0],
-                "parent": "6_Link"
+                "parent": "6_Link",
+                "collision":{
+                    "type": "box",
+                    "half_extents": [0.03, 0.02, 0.02],
+                    "pos": [0,0,0],
+                    "rpy": [0,0,0] 
+                }
             },
             {
                 "link_name": "camera_link",
                 "mesh": "camera_Link.STL",
                 "origin_xyz": [0.033, 0.0, 0.035],
                 "origin_rpy": [0.0, 0.0, 0.0],
-                "parent": "6_Link"
+                "parent": "6_Link",
+                "collision":{
+                    "type": "box",
+                    "half_extents": [0.015, 0.015, 0.015],
+                    "pos": [0,0,0],
+                    "rpy": [0,0,0] 
+                }
             }
         ]
     },
