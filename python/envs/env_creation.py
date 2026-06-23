@@ -139,6 +139,7 @@ class MakeEnv:
 
         # target settings:
         self.target_radius = params["target_settings"]["radius"]
+        self.target_height = params["target_settings"]["height"]
         
         # visual settings:
         self.znear       = params["visual_settings"]["znear"]
@@ -158,6 +159,7 @@ class MakeEnv:
 
         # initialize spec:
         self.spec = mj.MjSpec()
+        self.spec.modelfiledir = self.mesh_dir
 
         # set the compiler settings:
         self.spec.compiler.degree = self.compiler_angle # 1 -> degress, 0 -> radians
@@ -175,7 +177,8 @@ class MakeEnv:
         self.spec.visual.scale.framewidth   = self.framewidth
 
         # default settings:
-        self.spec.default.joint.damping = self.joint_damping
+        self.spec.default.joint.damping = np.array([self.joint_damping, 0.0, 0.0])
+        self.spec.default.joint.armature = self.joint_armature
 
         # add the skybox:
         self.spec.add_texture(name = self.skybox_name,
@@ -208,23 +211,6 @@ class MakeEnv:
                                      rgba = self.ground_rgba)
         
 
-    def add_meshes(self):
-        """
-        Register all STL meshes - reads ile names from params
-        """
-        for jd in self._joint_data:
-            self.spec.add_mesh(
-                name = f"{jd['link_name']}_mesh",
-                file = jd['mesh']
-            )
-
-        for fl in self._fixed_links:
-            self.spec.add_mesh(
-                name = f"{fl['link_name']}_mesh",
-                file = fl['mesh']
-            )
-
-
     def add_robot(self, robot_pos: list):
         """
         Attach the robot to the world at ``robot_pos`` and build the kinematic chain
@@ -241,9 +227,9 @@ class MakeEnv:
 
         for mesh_file in mesh_names:
             mesh_name = os.path.splitext(mesh_file)[0]
-            if mesh_name in self.mesh_name_lookup:
+            if mesh_name in self._mesh_name_lookup:
                 continue
-            self.spec.add_mesh(name=mesh_name, file=os.path.join(self.mesh_dir, mesh_file))
+            self.spec.add_mesh(name=mesh_name, file=mesh_file)
             self._mesh_name_lookup[mesh_file] = mesh_name
 
         # base body, fixed to the world at robot_pos
@@ -257,7 +243,7 @@ class MakeEnv:
         
         # visual-only footprint disc marking the robot' reach/no-go zone on the ground:
         self.robot.add_geom(name=self.robot_footprint_name,
-                            type = mj.mjGeom.mjGEOM_CYLINDER,
+                            type = mj.mjtGeom.mjGEOM_CYLINDER,
                             size=[self.robot_footprint_radius, self.robot_footprint_height,0.0],
                             contype=self.robot_footprint_contype,
                             conaffinity=self.robot_footprint_conaffinity,
@@ -286,12 +272,47 @@ class MakeEnv:
                           conaffinity=0,
                           rgba=self.link_rgba)
             
-        #TODO: Finish the add_robot() function
-        
-        # add joints
+            col = jd["collision"]
+            body.add_geom(name=f"{jd["link_name"]}_collision",
+                          type=_COLLISION_GEOM_TYPE[col["type"]],
+                          size=_collision_geom_size(col),
+                          pos=col["pos"],
+                          euler=col["rpy"],
+                          contype=1,
+                          conaffinity=1,
+                          rgba=[0,0,0,0])
+            
+            self._body_lookup[jd["link_name"]] = body
+            parent_body = body
 
-        pass
-    
+        for fl in self._fixed_links:
+            parent_body = self._body_lookup[fl["parent"]]
+            body = parent_body.add_body(name=fl["link_name"],
+                                        pos=fl["origin_xyz"],
+                                        euler=fl["origin_rpy"])
+            
+            # visual geom: the actual mesh, no collision:
+            body.add_geom(name=f"{fl['link_name']}_visual",
+                        type=mj.mjtGeom.mjGEOM_MESH,
+                        meshname=self._mesh_name_lookup[fl["mesh"]],
+                        contype=0,
+                        conaffinity=0,
+                        rgba=self.tool_rgba)
+            
+            col = jd["collision"]
+            body.add_geom(name=f"{fl["link_name"]}_collision",
+                        type=_COLLISION_GEOM_TYPE[col["type"]],
+                        size=_collision_geom_size(col),
+                        pos=col["pos"],
+                        euler=col["rpy"],
+                        contype=1,
+                        conaffinity=1,
+                        rgba=[0,0,0,0])
+            
+            self._body_lookup[fl["link_name"]] = body
+
+        self.end_effector_body = self._body_lookup[self._joint_data[-1]["link_name"]]
+
     def add_actuators(self): 
         """
         This function add the actuators at each joint
@@ -310,8 +331,48 @@ class MakeEnv:
         
 
     def add_sensors(self):
-        #TODO: write code for add_sensors to be able to view the joint angles
-        pass
+        """
+        Add joint-state and end-effector sensors.
+
+        After compile(), readings are available via:
+        data.sensordata - flat array, ordered by sensor definition
+
+        Sensor layout (18 values total):
+
+            [0:6] jointpos - q for joints 1-6 (rads)
+            [6:12] jointvel - qdot for joints 1-6 (rads/s)
+            [12:15] framepos - EE Cartesian position (m)
+            [15:18] framequat - EE orientation quarternion (w,x,y,z)
+        """
+        # joint position sensors (one per revolute joint):
+        for jd in self._joint_data:
+            s = self.spec.add_sensor()
+            s.name = f"pos_{jd['joint_name']}"
+            s.type = mj.mjtSensor.mjSENS_JOINTPOS
+            s.objtype = mj.mjtObj.mjOBJ_JOINT
+            s.objname = jd['joint_name']
+
+        # joint velocity sensors (one per revolute joint):
+        for jd in self._joint_data:
+            s = self.spec.add_sensor()
+            s.name = f"vel_{jd['joint_name']}"
+            s.type = mj.mjtSensor.mjSENS_JOINTVEL
+            s.objtype = mj.mjtObj.mjOBJ_JOINT
+            s.objname = jd['joint_name']
+
+        # end-effector Cartesian Position
+        s = self.spec.add_sensor()
+        s.name = "ee_pos"
+        s.type = mj.mjtSensor.mjSENS_FRAMEPOS
+        s.objtype = mj.mjtObj.mjOBJ_BODY
+        s.objname = self._joint_data[-1]['link_name']
+
+        # end-effector orientation (quarternion)
+        s = self.spec.add_sensor()
+        s.name = "ee_quat"
+        s.type = mj.mjtSensor.mjSENS_FRAMEQUAT
+        s.objtype = mj.mjtObj.mjOBJ_BODY
+        s.objname = self._joint_data[-1]['link_name']  
 
     def add_obstacle(self, obs_pos:list):
         """
@@ -335,10 +396,6 @@ class MakeEnv:
         footprint_size[0] += self.allowance
         footprint_size[1] = self.robot_footprint_height
 
-        # add joints to the obstacle:
-        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
-        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
-        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_z_hinge", type = mj.mjtJoint.mjJNT_HINGE, axis = [0, 0, 1])
 
         self.obstacle.add_geom(name=f"obstacle_{self.obstacle_counter}_geom",
                                type = mj.mjtGeom.mjGEOM_SPHERE,
@@ -347,17 +404,6 @@ class MakeEnv:
                                conaffinity = 1,
                                rgba = [0,0,1,1]
                                )
-        self.obstacle_footprint = self.obstacle.add_body(name=f"obstacle__{self.obstacle_counter}_footprint",
-                                           pos = [0,0,self.footprint_height])
-
-        self.obstacle_footprint.add_geom(name=f"obstacle__{self.obstacle_counter}_footprint_geom",
-                           type = mj.mjtGeom.mjGEOM_SPHERE,
-                           size = footprint_size,
-                           pos = [0, 0, -self.obstacle_height + self.robot_footprint_height],
-                           contype = 1,
-                           conaffinity = 1,
-                           rgba = [1,0,0,0.1])
-
 
     def add_target(self, target_pos:list):
         """
@@ -374,7 +420,7 @@ class MakeEnv:
                                                    pos= target_pos)
         
         self.target.add_geom(name="target_geom",
-                             type=mj.mjGEOM.mjGEOM_SPHERE,
+                             type=mj.mjtGeom.mjGEOM_SPHERE,
                              size= self.target_radius,
                              contype=0,
                              conaffinity=0,
@@ -399,7 +445,29 @@ class MakeEnv:
         adding in the manipulator (robot), actuators, sensors, targets and obstacles and then compiling the ``spec`` into a usable ``model``
         """
         #TODO: Add make_env environment (the main function)
-        pass
+
+        # initialize the spec:
+        self.make_spec()
+
+        # add the robot:
+        self.add_robot(robot_pos = [robot_pos[0], robot_pos[1], self.robot_footprint_height])
+
+        # add sensors:
+        self.add_sensors()
+
+        # add target:
+        self.add_target(target_pos = [target_pos[0], target_pos[1], self.target_height])
+
+        # add obstalces:
+        n_obstacles = len(obs_pos)
+
+        # for every obstacle
+        for i in range (n_obstacles):
+            # add a primitive obstacle:
+            self.add_obstacle(obs_pos = [obs_pos[i][0], obs_pos[i][1], self.obstacle_height])
+        
+        # compile into model:
+        self.compile()
 
     def render(self):
         """
@@ -423,7 +491,7 @@ class MakeEnv:
 
             # enable viewer options:
             self.viewer.opt.frame = mj.mjtFrame.mjFRAME_BODY
-            self.viewer.opt.flags[mj.mjVisFlag.mjVIS_JOINT] = True
+            self.viewer.opt.flags[mj.mjtVisFlag.mjVIS_JOINT] = True
 
             # while viewer is active, step the model every timestep:
             while self.viewer.is_running():
