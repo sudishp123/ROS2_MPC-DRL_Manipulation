@@ -77,10 +77,10 @@
                 "lower": -3.05,
                 "upper": 3.05,
                 "collision":{
-                    "type": "capsule",
-                    "radius": 0.035,
-                    "half_length": 0.04,
-                    "pos": [0, 0, 0],
+                    "type": "cylinder",
+                    "radius": 0.038,
+                    "half_length": 0.035,
+                    "pos": [0, 0, 0.035],
                     "rpy": [0,0,0]
                 }
             },
@@ -95,9 +95,9 @@
                 "upper": 1.57,
                 "collision":{
                     "type": "capsule",
-                    "radius": 0.035,
-                    "half_length": 0.05,
-                    "pos": [0, 0, 0.05],
+                    "radius": 0.030,
+                    "half_length": 0.055,
+                    "pos": [0, -0.023, 0.052],
                     "rpy": [0,0,0]
                 }
             },
@@ -112,9 +112,9 @@
                 "upper": 1.57,
                 "collision":{
                     "type": "capsule",
-                    "radius": 0.03,
-                    "half_length": 0.045,
-                    "pos": [0, 0, 0],
+                    "radius": 0.028,
+                    "half_length": 0.048,
+                    "pos": [0, 0.023, 0.044],
                     "rpy": [0,0,0]
                 }
             },
@@ -129,9 +129,9 @@
                 "upper": 1.57,
                 "collision":{
                     "type": "capsule",
-                    "radius": 0.028,
-                    "half_length": 0.04,
-                    "pos": [0, 0, 0.0],
+                    "radius": 0.025,
+                    "half_length": 0.035,
+                    "pos": [0, -0.023, 0.008],
                     "rpy": [0,0,0]
                 }
             },
@@ -145,10 +145,10 @@
                 "lower": -3.05,
                 "upper": 3.05,
                 "collision":{
-                    "type": "capsule",
-                    "radius": 0.025,
+                    "type": "sphere",
+                    "radius": 0.030,
                     "half_length": 0.03,
-                    "pos": [0, 0, 0.0],
+                    "pos": [0.001, 0, 0.029],
                     "rpy": [0,0,0]
                 }
             },
@@ -163,8 +163,8 @@
                 "upper": 1.57,
                 "collision":{
                     "type": "sphere",
-                    "radius": 0.035,
-                    "pos": [0, 0, 0.05],
+                    "radius": 0.020,
+                    "pos": [0.007, 0, 0.0],
                     "rpy": [0,0,0]
                 }
             }          
@@ -178,7 +178,7 @@
                 "parent": "6_Link",
                 "collision":{
                     "type": "box",
-                    "half_extents": [0.03, 0.02, 0.02],
+                    "half_extents": [0.035, 0.025, 0.020],
                     "pos": [0,0,0],
                     "rpy": [0,0,0] 
                 }
@@ -186,7 +186,7 @@
             {
                 "link_name": "camera_link",
                 "mesh": "camera_Link.STL",
-                "origin_xyz": [0.033, 0.0, 0.035],
+                "origin_xyz": [0.012, 0.010, 0.008],
                 "origin_rpy": [0.0, 0.0, 0.0],
                 "parent": "6_Link",
                 "collision":{

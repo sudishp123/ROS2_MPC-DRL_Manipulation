@@ -50,7 +50,6 @@ class MakeEnv:
         : param params: a dict that contains the relevant parameters for creating the environment
         : type params: dict
         """
-
         # add params to self:
         self.params = params
 

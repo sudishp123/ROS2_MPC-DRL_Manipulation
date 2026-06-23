@@ -1,7 +1,10 @@
 ```bashrobot_drl_nmpc/
 ├── 📂 assets/
-    ├── urdf/
-│     └── jetcobot.urdf
+├── jetcobot
+    ├── meshes/
+    └── urdf/
+├── SO-ARM101
+│    
 ├── 📂 envs/
 │   ├── __init__.py
 │   ├── env_creation.py   # Generating random envs for training
