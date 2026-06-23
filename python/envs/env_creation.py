@@ -55,8 +55,8 @@ class MakeEnv:
         self.params = params
 
         # paths:
-        self.base_path = os.path.dirname(os.path.abspath(__file__))
-        self.mesh_dir  = os.path.join(self.base_path, 'assets','meshes')
+        self.base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Goes to Root of the folder
+        self.mesh_dir  = os.path.join(self.base_path, 'assets','jetcobot','meshes') # Can change jetcobot to another folder name
 
         ### OBJECT PARAMETERS ###
         # camera settings:
