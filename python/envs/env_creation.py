@@ -279,7 +279,7 @@ class MakeEnv:
                           euler=col["rpy"],
                           contype=1,
                           conaffinity=1,
-                          rgba=[0,0,0,0])
+                          rgba=[1,0,0,0.3])
             
             self._body_lookup[jd["link_name"]] = body
             parent_body = body
@@ -306,7 +306,7 @@ class MakeEnv:
                         euler=col["rpy"],
                         contype=1,
                         conaffinity=1,
-                        rgba=[0,0,0,0])
+                        rgba=[1,0,0,0.3])
             
             self._body_lookup[fl["link_name"]] = body
 
