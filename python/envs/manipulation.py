@@ -27,10 +27,9 @@ class Manipulation(MujocoEnv):
 
     Observation:
     [0:3] -> Cartesian EE position error (target - ee)
-    [3:6] -> Cartesian EE orientation aerror (axis-angle)
-    [6:12] -> Joint Positions (q)
-    [12:18] -> Joint Velocities (qdot)
-    [18] -> Distance to nearest obstalce
+    [3:9] -> Joint Positions (q)
+    [9:15] -> Joint Velocities (qdot)
+    [15] -> Distance to nearest obstalce
     """
     metadata = {"render_modes": ["human","rgb_array"], "render_fps":500}
 
@@ -74,21 +73,19 @@ class Manipulation(MujocoEnv):
         self.rew_target_scale =    rs.get("rew_target_scale", 200.0)
         self.rew_collision_scale = rs.get("rew_collision_scale", -100.0)
         self.rew_dist_scale =      rs.get("rew_dist_scale", 10.0)
-        self.rew_ori_scale =       rs.get("rew_ori_scale", 5.0)
         self.rew_effort_scale =    rs.get("rew_effort_scale", -0.1)
-        self.rew_time =            rs.get("rew_time", -0.5)
+        self.rew_time            = rs.get("rew_time", -0.5)
 
         # thresholds
-        self.pos_threshold =    0.02
-        self.ori_threshold =    0.1
+        self.pos_threshold    = 0.02
         self.collision_thresh = params["obstacle_settings"]["allowance"]
-        self.d_safe =           0.15
+        self.d_safe           = 0.15
 
         # episode counters
-        self.episode_counter = 0
-        rand =                    randomization_options or {}
+        self.episode_counter    = 0
+        rand                    = randomization_options or {}
         self.randomization_freq = rand.get("randomization_freq", 1)
-        self.reset_randomize =    False
+        self.reset_randomize    = False
 
         # workspace bounds
         # keep targets reachable: JetCobot max reach ~0.40 m
@@ -148,8 +145,172 @@ class Manipulation(MujocoEnv):
                 self.model, self.data,
                 width = self.width, height=self.height
             )
-            
-
-
         
+    # action space:
+    def _set_action_space(self):
+        """
+        DRL action = NMPC weight vector
+        NMPC maps w -> joint velocity commands at each control step
+        """
+        self.action_low = np.zeros(4, dtype=np.float32)
+        self.action_high = np.ones(4, dtype=np.float32)
+        self.action_space = gym.spaces.Box(
+            low=self.action_low, high=self.action_high, dtype=np.float32
+        )
+
+    # initialize observation space:
+    def _set_observation_space(self):
+        """
+        Observation Layout:
+            [0:3] -> Pos error
+            [4:9] -> Joint Positions q
+            [10: 15] -> Joint Velocities qdot
+            [16] -> nearest obstacle distance
+        """
+
+        obs_states = (
+            ["ex", "ey", "ez"]
+        +   [f"q{i}" for i in range(6)]
+        +   [f"q_dot{i}" for i in range(6)]
+        +   ["d_obs"]
+        )
+
+        self.obs_space_size = len(obs_states)
+        for i, name in enumerate(obs_states):
+            setattr(self, f"obs_{name}_idx", i)
+        
+        low = np.full(self._obs_space_size, -np.pi, dtype = np.float32)
+        high = np.full(self._obs_space_size, np.pi, dtype=np.float32)
+
+        # pos error
+        low[0:3] = -0.8 ; high[0:3] = 0.8
+
+        # joint limits from params
+        j_low = np.array([-3.05, -1.57, -1.57, -3.05, -1.57])
+        j_high = np.array([3.05, 1.57, 1.57, 3.05, 1.57])
+        low[3:9] = j_low; high[3:9] = j_high
+
+        # joint velocities
+        qdot_limit = 4.0
+        low[9:15] = -qdot_limit; high[9:15] = qdot_limit
+
+        # obstacle distance
+        low[15] = 0.0; high[16] = 2.0
+
+        self.observation_space = gym.spaces.Box(
+            low=low, high=high, dtype=np.float32
+        )
+
+    # obtain observations:
+    def _get_obs(self) -> np.ndarray:
+        sd = self.data.sensordata
+
+        # joint state from sensors:
+        q = sd[self._q_slice].astype(np.float32)
+        qdot = sd[self._qdot_slice].astype(np.float32)
+
+        ## EE pose from sensors
+        ee_pos = sd[self._ee_pos_slice]
+        
+        # target position
+        tgt_pos = self.data.xpos[self.target_body_id]
+
+        # Cartesian Position Error
+        pos_error = (tgt_pos - ee_pos).astype(np.float32)
+
+        # nearest obstacle distance
+        self.nearest_obstacle = self._nearest_obstacle_dist()
+
+        self._obs_buffer[0:3] = pos_error
+        self._obs_buffer[3:9] = q
+        self._obs_buffer[9:15] = qdot
+        self._obs_buffer[15] = self.nearest_obstacle
+
+        return self._obs_buffer
+    
+    # step function
+    
+
+    # helper functions:
+    def _compute_link_obstalce_distances(self) -> np.ndarray:
+        """
+        Computes minimum distance between each robot link and each obstalce,
+        returning minimum over obstacles per link
+
+        Link geometry: capsule approximated as line segment
+        Obstacle geometry: sphere with center T and radius r
+        """
+
+        LINK_SEGMENTS = [
+            ("1_Link", "2_Link", 0.070),
+            ("2_Link", "3_Link", 0.060),
+            ("3_Link", "4_Link", 0.056),
+            ("4_Link", "5_Link", 0.050),
+            ("5_Link", "6_Link", 0.040),
+            ("6_Link", "jiazhua_Link", 0.040),
+        ]
+
+        g_hat = np.full(len(LINK_SEGMENTS), np.inf)
+
+        for link_idx, (body_start, body_end, diameter) in enumerate(LINK_SEGMENTS):
+            try:
+                T1 = self.data.xpos[self.model.body(body_start).id].copy()
+                T2 = self.data.xpos[self.model.body(body_end).id].copy()
+                D = diameter
+                r = self.obstacle_radius
+
+                min_dist_over_obstacles = np.inf
+
+                for obs_idx in range(1, self.n_obstacles + 1):
+                    T = self.data.xpos[
+                        self.model.body(f"obstalce_{obs_idx}").id
+                    ].copy()
+
+                    dist = self._segment_sphere_distance(T1, T2, T, D, r)
+                    if dist < min_dist_over_obstacles:
+                        min_dist_over_obstacles = dist
+            except:
+                g_hat[link_idx] = np.inf # body not found - skip
+        return g_hat
+    
+    # Calculating distance between link j and the obstacle denoted
+    def _segment_sphere_distance(
+            T1: np.ndarray,
+            T2: np.ndarray,
+            T: np.ndarray,
+            D: float,
+            r: float
+    ) -> float:
+        """
+        Minimum distance between:
+            - Cylindrical Link segment T1 -> T2 with diameter D
+            - spherical obstacle centered at T with radius r
+
+        Returns scalar clearance distance (positive = safe, negative = collision)
+        """
+
+        segment = T2-T1
+        seg_len_sq = np.dot(segment, segment)
+
+        # Projection factor t
+        t = np.dot(T-T1, segment)/seg_len_sq
+
+        if 0.0 <= t <= 1.0:
+            cross = np.cross(T-T1, T-T2)
+            dist_to_axis = np.linalg.norm(cross) / np.sqrt(seg_len_sq)
+            return float((dist_to_axis) - (D/2.0) - r)
+        
+        else:
+            # projection falls outside segment - use closer endpoint
+            d1 = np.linalg.norm(T-T1)
+            d2 = np.linalg.norm(T-T2)
+            return float(min(d1, d2) - D/2.0 - r)
+
+
+
+
+
+
+
+
 
