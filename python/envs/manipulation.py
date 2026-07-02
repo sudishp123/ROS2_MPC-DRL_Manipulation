@@ -7,9 +7,11 @@ from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.registration import register
 from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-import os, json
+
+import os, json, sys
 
 from env_creation import MakeEnv
+from python.mpc.nmpc_controller import NMPCController
 
 # Directories
 _THIS_FILE = os.path.abspath(__file__)
@@ -68,6 +70,13 @@ class Manipulation(MujocoEnv):
         self.is_eval = is_eval
         self.n_obstacles = n_obstacles
 
+        # overhead camera
+        self.cam_width = 84
+        self.cam_height = 84
+        self.cam_id = self.model.camera("overhead_camera").id
+
+        self._renderer = mj.Renderer(self.model, height=self.cam_height, widht=self.cam_height)
+        
         # reward scales
         rs =                       reward_scale_options or {}
         self.rew_target_scale =    rs.get("rew_target_scale", 200.0)
@@ -197,9 +206,11 @@ class Manipulation(MujocoEnv):
         # obstacle distance
         low[15] = 0.0; high[16] = 2.0
 
-        self.observation_space = gym.spaces.Box(
-            low=low, high=high, dtype=np.float32
-        )
+        self.observation_space = gym.spaces.Dict({
+        "state": gym.spaces.Box(low=low, high=high, dtype=np.float32),
+        "image": gym.spaces.Box(low=0, high=255, shape=(self.cam_height, self.cam_width, 3),  dtype=np.uint8)
+        })
+
 
     # obtain observations:
     def _get_obs(self) -> np.ndarray:
@@ -221,17 +232,161 @@ class Manipulation(MujocoEnv):
         # nearest obstacle distance
         self.nearest_obstacle = self._nearest_obstacle_dist()
 
-        self._obs_buffer[0:3] = pos_error
-        self._obs_buffer[3:9] = q
-        self._obs_buffer[9:15] = qdot
-        self._obs_buffer[15] = self.nearest_obstacle
+        state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]].astype(np.float32))
 
-        return self._obs_buffer
+        return {
+            "state": state,
+            "image": self._get_image
+        }
     
     # step function
+    def step(self, action: np.ndarray):
+        """
+        Unpack NMPC weights from DRL action
+
+        Solve NMPC -> qdot_cmd that is used in this function for reward calculation       
+        """
+        action = np.clip(action, self.action_low, self.action_high)
+
+        w_pos, w_ori, w_qdot, w_slack = action
+
+        qdot_cmd = NMPCController.solve(self._get_obs()[9:15], target, T_obs)
+
+        self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
+        mj.mj_step(self.model, self.data, nstep=self.frame_skip)
+
+        nobs= self._get_obs()
+        pos_err = nobs[0:3]
+        d_pos = float(np.linalg.norm(pos_err))
+
+        goal_cond = (d_pos < self.pos_threshold)
+        collision_cond = self.nearest_obstacle < self.collision_thresh
+        term = goal_cond or collision_cond
+
+        if goal_cond:
+            rew = self.rew_goal_scale
+        elif collision_cond:
+            rew = self.rew_collision_scale
+        else:
+            rew_dist = (self.d_pos_last - d_pos) * self.rew_dist_scale
+            rew_effort = -float(np.sum(qdot_cmd**2)) * self.rew_effort_scale
+            rew = rew_dist + rew_effort + self.rew_time
+
+        info = {}
+        if term:
+            info["is_success"] = bool(goal_cond)
+            info["collision"]  = bool(collision_cond)
+
+        self.d_pos_last = d_pos
+        self.action_last = action
+
+        if self.render_mode == "human":
+            self.render()
+        
+        return nobs, rew, term, False, info
+
+    # reset:
+    def reset(self, seed=None, options=None):
+        self.episode_counter +=1
+        self._qdot_norm_prev = 0.0
+        self.step_coutn = 0
+
+        super().reset(seed=seed)
+        mj.mj_resetData(self.model, self.data)
+
+        should_randomize = self.is_eval or (
+            self.episode_counter % self.randomization_freq == 0
+        )
+        ob = self.reset_model(randomize=should_randomize)
+
+        if self.render_mode == "human":
+            self.render()
+        return ob, {}
     
+    def _reset_model(self, randomize: bool = False) -> np.ndarray:
+        qpos = self.init_qpos.copy()
+        qvel = self.init_qvel.copy()
+
+        if randomize:
+            # randomize joint home position slightly
+            qpos[:6] += self.np_random.uniform(-0.1, 0.1, size=6)
+            qpos[:6] = np.clip(qpos[:6],
+                               [-3.05, -1.57, -1.57, -1.57, -3.05, -1.57],
+                                [ 3.05,  1.57,  1.57,  1.57,  3.05,  1.57])
+            
+            # randomize target position
+            new_target = self.np_random.uniform(
+                low = self.target_bound_low, high= self.target_bound_high
+            )
+            target_id = self.model.body("target").mocapid[0]
+            self.data.mocap_pos[target_id] = new_target
+
+            # randomize obstacle positions
+            new_obs_pos = self._sample_obstacle_positions(new_target, self.n_obstacles)
+            for i, pos in enumerate(new_obs_pos):
+                obs_id = self.model.body(f"obstacle_{i+1}".mocapid[0])
+                self.data.mocap_pos[obs_id] = pos
+
+            self.set_state(qpos, qvel)
+            mj.mj_forward(self.model, self.data)
+
+            ob = self._get_obs()
+            self.d_pos_last = float(np.linalg.norm(ob[0:3]))
+            self.action_last = np.zeros(self.action_space.shape)
+            return ob
+        
+    def render(self):
+        if self.mujoco_render is not None:
+            return self.mujoco_renderer.render(self.render_mode)
+        
+    def close(self):
+        if self.mujoco_renderer is not None:
+            self.mujoco_renderer.close()
+        self._renderer.close()   
 
     # helper functions:
+    def _compute_reward(self, pos_err_norm, poss_err_norm_prev, qdot, g_hat):
+        """
+        r1: relative change in EE pose error (setpoint control)
+        r2: goal bonus when error < threshold
+        r3: collision avoidance per link
+        r4: time penalty
+        r5: relative change in joint velocity norm
+        """
+
+        eps = 1e-6 # Avoids sudden jumps vs absolute error
+        r1 =  (pos_err_norm - poss_err_norm_prev)/ (pos_err_norm + eps)
+
+        # r2 - goal bonus
+        if pos_err_norm < 0.03:
+            r2 = -500.0
+        else:
+            0.0
+        
+        # r3 - collision avoidance per link
+        # g_hat: array of min distances per link
+        r3 = 0.0
+        for g in g_hat:
+            if g >= self.d_safe:
+                r3 += -10.0 * (g**2)           # reward for being safe
+            elif g > 0:
+                r3 += 10.0 * (g**2)            # penalty for proximity
+            else:
+                r3 += 1000.0                   # collision penalty
+
+        # r4 - time penalty
+        r4 = self.step_count                  # penalize longer episdoes
+
+        # r5 - relative joint velocity change
+        qdot_norm = np.linalg.norm(qdot)
+        r5 = (qdot_norm - self._qdot_norm_prev)/(self._qdot_norm_prev + eps)
+        self._qdot_norm_prev = qdot_norm
+
+        # Reward linear combination - based on paper
+        C1, C2, C3, C4, C5 = 1000.0, 1.0, 1.0, 1.0, 100.0
+        R = C1*r1 + C2*r2 + C3*r3 + C4*r4 + C5*r5
+        return R
+
     def _compute_link_obstalce_distances(self) -> np.ndarray:
         """
         Computes minimum distance between each robot link and each obstalce,
@@ -305,6 +460,8 @@ class Manipulation(MujocoEnv):
             d1 = np.linalg.norm(T-T1)
             d2 = np.linalg.norm(T-T2)
             return float(min(d1, d2) - D/2.0 - r)
+        
+
 
 
 
