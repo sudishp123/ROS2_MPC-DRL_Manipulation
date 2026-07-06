@@ -18,7 +18,7 @@ _THIS_FILE = os.path.abspath(__file__)
 _ENVS_DIR = os.path.dirname(_THIS_FILE)
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_ENVS_DIR))
 
-class Manipulation(MujocoEnv):
+class Manipulation(gym.Env):
     """
     class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
 
@@ -31,7 +31,7 @@ class Manipulation(MujocoEnv):
     [0:3] -> Cartesian EE position error (target - ee)
     [3:9] -> Joint Positions (q)
     [9:15] -> Joint Velocities (qdot)
-    [15] -> Distance to nearest obstalce
+    [15] -> Distance to nearest obstacle
     """
     metadata = {"render_modes": ["human","rgb_array"], "render_fps":500}
 
@@ -70,13 +70,14 @@ class Manipulation(MujocoEnv):
         self.is_eval = is_eval
         self.n_obstacles = n_obstacles
 
-        # overhead camera
-        self.cam_width = 84
-        self.cam_height = 84
-        self.cam_id = self.model.camera("overhead_camera").id
+        #TODO - initialize and add counters for these
+        self._qdot_norm_prev = 0.0
+        self.step_count = 0
+        #-------------------------------------------------
 
-        self._renderer = mj.Renderer(self.model, height=self.cam_height, widht=self.cam_height)
         
+        self.obstacle_radius = params["obstacle_settings"]["size_high"]
+
         # reward scales
         rs =                       reward_scale_options or {}
         self.rew_target_scale =    rs.get("rew_target_scale", 200.0)
@@ -119,6 +120,12 @@ class Manipulation(MujocoEnv):
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
 
+        # overhead camera
+        self.cam_width = 84
+        self.cam_height = 84
+        self.cam_id = self.model.camera("overhead_camera").id
+        self._renderer = mj.Renderer(self.model, height=self.cam_height, width=self.cam_height)
+
         # cache body/sensor IDs
         self.ee_body_id = self.model.body("6_Link").id
         self.target_body_id = self.model.body("target").id
@@ -154,6 +161,17 @@ class Manipulation(MujocoEnv):
                 self.model, self.data,
                 width = self.width, height=self.height
             )
+
+        self.nmpc = NMPCController(N=5, dt=0.001*frame_skip, ds=self.d_safe)
+
+    def set_state(self, qpos, qvel):
+        self.data.qpos[:] = qpos
+        self.data.qvel[:] = qvel
+        mj.mj_forward(self.model, self.data)
+
+    def _get_image(self) -> np.ndarray:
+        self._renderer.update_scene(self.data, camera=self.cam_id)
+        return self._renderer.render().copy()
         
     # action space:
     def _set_action_space(self):
@@ -172,8 +190,8 @@ class Manipulation(MujocoEnv):
         """
         Observation Layout:
             [0:3] -> Pos error
-            [4:9] -> Joint Positions q
-            [10: 15] -> Joint Velocities qdot
+            [3:9] -> Joint Positions q
+            [9: 15] -> Joint Velocities qdot
             [16] -> nearest obstacle distance
         """
 
@@ -184,7 +202,7 @@ class Manipulation(MujocoEnv):
         +   ["d_obs"]
         )
 
-        self.obs_space_size = len(obs_states)
+        self._obs_space_size = len(obs_states)
         for i, name in enumerate(obs_states):
             setattr(self, f"obs_{name}_idx", i)
         
@@ -195,8 +213,8 @@ class Manipulation(MujocoEnv):
         low[0:3] = -0.8 ; high[0:3] = 0.8
 
         # joint limits from params
-        j_low = np.array([-3.05, -1.57, -1.57, -3.05, -1.57])
-        j_high = np.array([3.05, 1.57, 1.57, 3.05, 1.57])
+        j_low = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
+        j_high = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
         low[3:9] = j_low; high[3:9] = j_high
 
         # joint velocities
@@ -236,7 +254,7 @@ class Manipulation(MujocoEnv):
 
         return {
             "state": state,
-            "image": self._get_image
+            "image": self._get_image()
         }
     
     # step function
@@ -248,15 +266,25 @@ class Manipulation(MujocoEnv):
         """
         action = np.clip(action, self.action_low, self.action_high)
 
-        w_pos, w_ori, w_qdot, w_slack = action
+        theta_s = action[0:3]
+        theta_r = action[3:9]
+        theta_g = action[9:12]
+        self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
-        qdot_cmd = NMPCController.solve(self._get_obs()[9:15], target, T_obs)
+        q               = self.data.sensordata[self._q_slice]
+        p_des           = self.data.xpos[self.target_body_id]
+        T_obs           = self.data.xpos[self.model.body("obstacle_1").id]
+        qdot_cmd, info  = self.nmpc.silve(q, p_des, T_obs)
+
+        
+
+        qdot_cmd = NMPCController.solve(q, p_des, T_obs)
 
         self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()
-        pos_err = nobs[0:3]
+        pos_err = nobs["state"][0:3]
         d_pos = float(np.linalg.norm(pos_err))
 
         goal_cond = (d_pos < self.pos_threshold)
@@ -264,7 +292,7 @@ class Manipulation(MujocoEnv):
         term = goal_cond or collision_cond
 
         if goal_cond:
-            rew = self.rew_goal_scale
+            rew = self.rew_target_scale
         elif collision_cond:
             rew = self.rew_collision_scale
         else:
@@ -289,7 +317,7 @@ class Manipulation(MujocoEnv):
     def reset(self, seed=None, options=None):
         self.episode_counter +=1
         self._qdot_norm_prev = 0.0
-        self.step_coutn = 0
+        self.step_count = 0
 
         super().reset(seed=seed)
         mj.mj_resetData(self.model, self.data)
@@ -297,7 +325,7 @@ class Manipulation(MujocoEnv):
         should_randomize = self.is_eval or (
             self.episode_counter % self.randomization_freq == 0
         )
-        ob = self.reset_model(randomize=should_randomize)
+        ob = self._reset_model(randomize=should_randomize)
 
         if self.render_mode == "human":
             self.render()
@@ -324,19 +352,19 @@ class Manipulation(MujocoEnv):
             # randomize obstacle positions
             new_obs_pos = self._sample_obstacle_positions(new_target, self.n_obstacles)
             for i, pos in enumerate(new_obs_pos):
-                obs_id = self.model.body(f"obstacle_{i+1}".mocapid[0])
+                obs_id = self.model.body(f"obstacle_{i+1}").mocapid[0]
                 self.data.mocap_pos[obs_id] = pos
 
-            self.set_state(qpos, qvel)
-            mj.mj_forward(self.model, self.data)
+        self.set_state(qpos, qvel)
+        mj.mj_forward(self.model, self.data)
 
-            ob = self._get_obs()
-            self.d_pos_last = float(np.linalg.norm(ob[0:3]))
-            self.action_last = np.zeros(self.action_space.shape)
-            return ob
+        ob = self._get_obs()
+        self.d_pos_last = float(np.linalg.norm(ob[0:3]))
+        self.action_last = np.zeros(self.action_space.shape)
+        return ob
         
     def render(self):
-        if self.mujoco_render is not None:
+        if self.mujoco_renderer is not None:
             return self.mujoco_renderer.render(self.render_mode)
         
     def close(self):
@@ -361,7 +389,7 @@ class Manipulation(MujocoEnv):
         if pos_err_norm < 0.03:
             r2 = -500.0
         else:
-            0.0
+            r2 = 0.0
         
         # r3 - collision avoidance per link
         # g_hat: array of min distances per link
@@ -387,9 +415,9 @@ class Manipulation(MujocoEnv):
         R = C1*r1 + C2*r2 + C3*r3 + C4*r4 + C5*r5
         return R
 
-    def _compute_link_obstalce_distances(self) -> np.ndarray:
+    def _compute_link_obstacle_distances(self) -> np.ndarray:
         """
-        Computes minimum distance between each robot link and each obstalce,
+        Computes minimum distance between each robot link and each obstacle,
         returning minimum over obstacles per link
 
         Link geometry: capsule approximated as line segment
@@ -418,18 +446,19 @@ class Manipulation(MujocoEnv):
 
                 for obs_idx in range(1, self.n_obstacles + 1):
                     T = self.data.xpos[
-                        self.model.body(f"obstalce_{obs_idx}").id
+                        self.model.body(f"obstacle_{obs_idx}").id
                     ].copy()
 
                     dist = self._segment_sphere_distance(T1, T2, T, D, r)
                     if dist < min_dist_over_obstacles:
                         min_dist_over_obstacles = dist
+                    g_hat[link_idx] = min_dist_over_obstacles
             except:
                 g_hat[link_idx] = np.inf # body not found - skip
         return g_hat
     
     # Calculating distance between link j and the obstacle denoted
-    def _segment_sphere_distance(
+    def _segment_sphere_distance(self,
             T1: np.ndarray,
             T2: np.ndarray,
             T: np.ndarray,
