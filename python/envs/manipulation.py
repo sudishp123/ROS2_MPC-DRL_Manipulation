@@ -273,7 +273,12 @@ class Manipulation(gym.Env):
 
         q               = self.data.sensordata[self._q_slice]
         p_des           = self.data.xpos[self.target_body_id]
-        T_obs           = self.data.xpos[self.model.body("obstacle_1").id]
+        ee_pos          = self.data.sensordata[self._ee_pos_slice]
+
+        T_obs           = min(
+            [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
+            key=lambda pos:np.linalg.norm(pos-ee_pos)
+            ).copy()
         qdot_cmd, info  = self.nmpc.silve(q, p_des, T_obs)
 
         
