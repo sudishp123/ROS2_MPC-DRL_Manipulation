@@ -19,7 +19,7 @@ class NMPCController:
         self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics()
 
     #----------------Joint Limits---------------- 
-        self.q_min = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
+        self.q_min = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
         self.q_max = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
 
         self.qdot_min = np.full(6, -4.0) #Locked Motor speed is 52 RPM = 5.445 rads/s so haing a 75% operating limit
@@ -177,7 +177,7 @@ class NMPCController:
         #Stage Cost: sum_{k=0}^{N-1} (x_k^T S^theta_k x_k + qdot^T R^theta_k qdot^T + eta^T zeta_k)
         for k in range(N):
             # Cartesian Error x_k = p_des - p_k
-            p_e_k = ca.substitue(self.p_e_sym, self.q_kin,Q[k])
+            p_e_k = ca.substitute(self.p_e_sym, self.q_kin,Q[k])
             x_k = p_des - p_e_k
 
             #S^theta_l = diag(theta_s) - DRL tunes the diagonal
@@ -257,7 +257,7 @@ class NMPCController:
 
         info = {
             'cost'   : float(sol['f']),
-            'status' : self.solver.stats()(['return_status']),
+            'status' : self.solver.stats()['return_status'],
             'p_e'    : np.array(self.fk_fn(q_current)).flatten(),
         }
 

@@ -30,7 +30,7 @@ def _collision_geom_size(spec:dict) -> list:
     elif gtype == "box":
         return list(spec["half_extents"])
     else:
-        return ValueError(f"Unsupported Collision geom type: {gtype}")
+        raise ValueError(f"Unsupported Collision geom type: {gtype}")
 
 
 # define main class for creating the environment:
@@ -298,7 +298,7 @@ class MakeEnv:
                         conaffinity=0,
                         rgba=self.tool_rgba)
             
-            col = jd["collision"]
+            col = fl["collision"]
             body.add_geom(name=f"{fl["link_name"]}_collision",
                         type=_COLLISION_GEOM_TYPE[col["type"]],
                         size=_collision_geom_size(col),
@@ -310,7 +310,7 @@ class MakeEnv:
             
             self._body_lookup[fl["link_name"]] = body
 
-        self.end_effector_body = self._body_lookup[self._joint_data[-1]["link_name"]]
+        self.end_effector_body = self._body_lookup[self._fixed_links[-1]["link_name"]]
 
     def add_actuators(self): 
         """
@@ -494,6 +494,6 @@ class MakeEnv:
 
             # while viewer is active, step the model every timestep:
             while self.viewer.is_running():
-                mujoco.mj_step(self.model, self.data)
+                mj.mj_step(self.model, self.data)
                 self.viewer.sync()
         

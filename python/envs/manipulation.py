@@ -179,8 +179,8 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(4, dtype=np.float32)
-        self.action_high = np.ones(4, dtype=np.float32)
+        self.action_low = np.zeros(12, dtype=np.float32)
+        self.action_high = np.ones(12, dtype=np.float32)
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
         )
@@ -222,7 +222,7 @@ class Manipulation(gym.Env):
         low[9:15] = -qdot_limit; high[9:15] = qdot_limit
 
         # obstacle distance
-        low[15] = 0.0; high[16] = 2.0
+        low[15] = 0.0; high[15] = 2.0
 
         self.observation_space = gym.spaces.Dict({
         "state": gym.spaces.Box(low=low, high=high, dtype=np.float32),
@@ -248,14 +248,17 @@ class Manipulation(gym.Env):
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
 
         # nearest obstacle distance
-        self.nearest_obstacle = self._nearest_obstacle_dist()
+        self.nearest_obstacle = min(self._compute_link_obstacle_distances())
 
-        state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]].astype(np.float32))
+        state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
 
         return {
             "state": state,
             "image": self._get_image()
         }
+    
+    # nearest obstacle distance
+
     
     # step function
     def step(self, action: np.ndarray):
@@ -279,11 +282,7 @@ class Manipulation(gym.Env):
             [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
             key=lambda pos:np.linalg.norm(pos-ee_pos)
             ).copy()
-        qdot_cmd, info  = self.nmpc.silve(q, p_des, T_obs)
-
-        
-
-        qdot_cmd = NMPCController.solve(q, p_des, T_obs)
+        qdot_cmd, info  = self.nmpc.solve(q, p_des, T_obs)
 
         self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
@@ -364,7 +363,7 @@ class Manipulation(gym.Env):
         mj.mj_forward(self.model, self.data)
 
         ob = self._get_obs()
-        self.d_pos_last = float(np.linalg.norm(ob[0:3]))
+        self.d_pos_last = float(np.linalg.norm(ob["state"][0:3]))
         self.action_last = np.zeros(self.action_space.shape)
         return ob
         
