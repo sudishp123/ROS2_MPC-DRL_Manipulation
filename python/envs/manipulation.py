@@ -271,7 +271,7 @@ class Manipulation(gym.Env):
 
         theta_s = action[0:3]
         theta_r = action[3:9]
-        theta_g = action[9:12]
+        theta_g = action[9:10]
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
         q               = self.data.sensordata[self._q_slice]
