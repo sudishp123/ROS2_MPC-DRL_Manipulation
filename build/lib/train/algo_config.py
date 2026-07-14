@@ -14,7 +14,7 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray.tune.registry import register_env
 
 from envs.manipulation import Manipulation
-from train.rl_modules import ManipulationPPOModule, ManipulationSACModule
+from training.rl_modules import ManipulationPPOModule, ManipulationSACModule
 
 CONFIG_PATH = Path(__file__).resolve().parents[1]/"config.yaml"
 

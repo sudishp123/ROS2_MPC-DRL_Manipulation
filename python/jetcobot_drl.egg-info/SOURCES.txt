@@ -16,6 +16,7 @@ python/mpc/jacobian/jacobian.py
 python/mpc/jacobian/jetcobot_jacobian_casadi.py
 python/train/__init__.py
 python/train/algo_config.py
-python/train/gym_PPO.py
+python/train/gym_ppo.py
+python/train/gym_sac.py
 python/train/optuna_tuning.py
 python/train/rl_modules.py

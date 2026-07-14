@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 import ray
 
-from train.algo_config import build_algo_config, load_yaml_config
+from training.algo_config import build_algo_config, load_yaml_config
 
 def load_best_overrides(algorithm: str) -> dict:
     path = Path(__file__).resolve.parents[1]/"best_configs"/f"best_{algorithm}.yaml"

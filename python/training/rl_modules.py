@@ -68,9 +68,6 @@ class FusionEncoder(nn.Module):
         fused = torch.cat([img_features, state_features], dim=1)
         return {ENCODER_OUT: self.fusion(fused)}
 
-
-
-
 class ManipulationPPOModule(DefaultPPOTorchRLModule):
     """
     PPO Module using FusionEncoder instea of RLlib's default encoder

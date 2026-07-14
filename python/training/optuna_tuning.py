@@ -13,7 +13,7 @@ from ray.tune import RunConfig, TuneConfig
 from ray.tune.search.optuna import OptunaSearch
 from ray.tune.schedulers import ASHAScheduler
 
-from train.algo_config import build_ppo_config, load_yaml_config
+from training.algo_config import build_algo_config, load_yaml_config
 
 CONFIG_PATH = Path(__file__).resolve().parents[2]/"config.yaml"
 
@@ -32,7 +32,7 @@ def build_search_space(spec: dict) -> dict:
 
 def make_trainable(algorithm: str):
     def trainable(trial_config:dict):
-        algo_config = build_ppo_config(algorith=algorithm, overrides=trial_config)
+        algo_config = build_algo_config(algorith=algorithm, overrides=trial_config)
         algo = algo_config.build()
 
         for i in range(cfg["training"]["max_iterations"]):

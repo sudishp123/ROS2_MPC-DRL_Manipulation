@@ -179,8 +179,8 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(12, dtype=np.float32)
-        self.action_high = np.ones(12, dtype=np.float32)
+        self.action_low = np.zeros(10, dtype=np.float32)
+        self.action_high = np.ones(10, dtype=np.float32)
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
         )
@@ -377,6 +377,39 @@ class Manipulation(gym.Env):
         self._renderer.close()   
 
     # helper functions:
+    def _sample_obstacle_positions(
+            self,
+            target_pos: np.ndarray,
+            n: int,
+            min_target_dist: float = 0.08,
+            min_obs_sep: float = 0.10,
+            max_tries: int = 100,
+    ) -> list[np.ndarray]:
+        """
+        Rejection-samples n obstacle positions inside the workspace bounds, keeping each obstalce 
+        away from the target (so the goal stays reachable) and away from other obstalces (so they don't overlap)
+
+        Falls back to the last candidate if max_tries is exceeded, so this always returns exactly n positions
+        """
+        target_pos = np.asarray(target_pos, dtype=np.float64)
+        positions: list[np.ndarray] = []
+
+        for _ in range(n):
+            candidate = None
+            for _attempt in range(max_tries):
+                candidate = self.np_random.uniform(
+                    low=self.target_bound_low, high=self.target_bound_high
+                )
+
+                if np.linalg.norm(candidate - target_pos) < min_target_dist:
+                    continue
+                if any(np.linalg.norm(candidate - p) < min_obs_sep for p in positions):
+                    continue
+                break
+            positions.append(candidate)
+
+        return positions                      
+
     def _compute_reward(self, pos_err_norm, poss_err_norm_prev, qdot, g_hat):
         """
         r1: relative change in EE pose error (setpoint control)

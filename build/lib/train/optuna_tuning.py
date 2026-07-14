@@ -13,7 +13,7 @@ from ray.tune import RunConfig, TuneConfig
 from ray.tune.search.optuna import OptunaSearch
 from ray.tune.schedulers import ASHAScheduler
 
-from train.algo_config import build_ppo_config, load_yaml_config
+from training.algo_config import build_ppo_config, load_yaml_config
 
 CONFIG_PATH = Path(__file__).resolve().parents[1]/"config.yaml"
 
