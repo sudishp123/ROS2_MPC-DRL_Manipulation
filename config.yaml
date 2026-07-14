@@ -1,0 +1,99 @@
+# python/config.yaml
+# Top-level hyperparameters for the JetCobot NMPC+DRL training pipeline.
+# `algorithm` selects which RLlib algorithm build_algo_config() builds.
+
+algorithm: ppo   # ppo | sac
+
+env:
+  json_file: environment_params.json
+  frame_skip: 5
+  render_mode: rgb_array
+  n_obstacles: 1
+  is_eval: false
+  reward_scale_options:
+    rew_target_scale: 200.0
+    rew_collision_scale: -100.0
+    rew_dist_scale: 10.0
+    rew_effort_scale: -0.1
+    rew_time: -0.5
+  randomization_options:
+    randomization_freq: 1
+
+resources:
+  num_gpus: 1
+  num_cpus_per_worker: 2
+  num_env_runners: 4
+  num_envs_per_env_runner: 1
+
+mpc:
+  N: 5                    # prediction horizon (steps)
+  dt: 0.001                # sim timestep; NMPCController gets dt * frame_skip
+  ds: 0.2                  # safety distance threshold (m)
+  q_min: [-3.05, -1.57, -1.57, -1.57, -3.05, -1.57]
+  q_max: [ 3.05,  1.57,  1.57,  1.57,  3.05,  1.57]
+  qdot_min: -4.0            # rad/s, applied to all 6 joints (75% of 52 RPM motor limit)
+  qdot_max: 4.0
+  S_N_diag: [10.0, 10.0, 10.0]     # terminal Cartesian-error weight
+  eta: 5.0                          # slack penalty (stage)
+  eta_f: 5.0                        # slack penalty (terminal)
+  init_theta_s: [10.0, 10.0, 10.0]   # theta_s/r/g before the first DRL action arrives
+  init_theta_r: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  init_theta_g: [0.0]
+  obstacle_radius: 0.15
+  link_radius: 0.05
+  ipopt_max_iter: 500
+  ipopt_tol: 1.0e-4
+
+model:
+  state_dim: 16
+  cam_height: 84
+  cam_width: 84
+  cnn_filters: [[32, [8, 8], 4], [64, [4, 4], 2], [64, [3, 3], 1]]
+  fc_hidden: [256, 512, 256]
+
+ppo:
+  lr: 1.0e-3
+  gamma: 0.99
+  clip_param: 0.2
+  entropy_coeff: 0.01
+  vf_loss_coeff: 0.5
+  kl_coeff: 0.2
+  num_epochs: 10
+  train_batch_size_per_learner: 1600
+  minibatch_size: 128
+
+sac:
+  lr: 3.0e-4              # SAC uses one lr unless you split actor/critic/alpha lrs
+  gamma: 0.99
+  tau: 0.005                       # target-network Polyak averaging rate
+  train_batch_size_per_learner: 256
+  target_entropy: auto
+  n_step: 1
+  replay_buffer_config:
+    type: EpisodeReplayBuffer
+    capacity: 200000
+  num_steps_sampled_before_learning_starts: 5000
+
+training:
+  max_iterations: 500
+  checkpoint_freq: 10
+  storage_path: /home/sudish/ray_results   # change to your machine's path
+  experiment_name: jetcobot_${algorithm}
+
+optuna:
+  n_trials: 30
+  max_concurrent_trials: 2
+  metric: env_runners/episode_return_mean
+  mode: max
+  search_space:
+    ppo:
+      lr:            {low: 1.0e-5, high: 1.0e-3, log: true}
+      gamma:         {low: 0.90,   high: 0.999}
+      clip_param:    {low: 0.10,   high: 0.30}
+      entropy_coeff: {low: 0.0,    high: 0.05}
+      train_batch_size_per_learner: {choices: [800, 1600, 3200]}
+    sac:
+      lr:  {low: 1.0e-5, high: 1.0e-3, log: true}
+      tau: {low: 0.001,  high: 0.02}
+      gamma: {low: 0.95, high: 0.999}
+      train_batch_size_per_learner: {choices: [128, 256, 512]}
