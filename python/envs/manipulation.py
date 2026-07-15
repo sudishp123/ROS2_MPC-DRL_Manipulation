@@ -120,12 +120,6 @@ class Manipulation(gym.Env):
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
 
-        # overhead camera
-        self.cam_width = 84
-        self.cam_height = 84
-        self.cam_id = self.model.camera("overhead_camera").id
-        self._renderer = mj.Renderer(self.model, height=self.cam_height, width=self.cam_height)
-
         # cache body/sensor IDs
         self.ee_body_id = self.model.body("6_Link").id
         self.target_body_id = self.model.body("target").id
@@ -168,10 +162,6 @@ class Manipulation(gym.Env):
         self.data.qpos[:] = qpos
         self.data.qvel[:] = qvel
         mj.mj_forward(self.model, self.data)
-
-    def _get_image(self) -> np.ndarray:
-        self._renderer.update_scene(self.data, camera=self.cam_id)
-        return self._renderer.render().copy()
         
     # action space:
     def _set_action_space(self):
@@ -224,10 +214,7 @@ class Manipulation(gym.Env):
         # obstacle distance
         low[15] = 0.0; high[15] = 2.0
 
-        self.observation_space = gym.spaces.Dict({
-        "state": gym.spaces.Box(low=low, high=high, dtype=np.float32),
-        "image": gym.spaces.Box(low=0, high=255, shape=(self.cam_height, self.cam_width, 3),  dtype=np.uint8)
-        })
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
 
 
     # obtain observations:
@@ -252,10 +239,7 @@ class Manipulation(gym.Env):
 
         state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
 
-        return {
-            "state": state,
-            "image": self._get_image()
-        }
+        return state
     
     # nearest obstacle distance
 

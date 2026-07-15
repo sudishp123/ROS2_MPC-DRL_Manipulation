@@ -14,7 +14,6 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray.tune.registry import register_env
 
 from envs.manipulation import Manipulation
-from training.rl_modules import ManipulationPPOModule, ManipulationSACModule
 
 CONFIG_PATH = Path(__file__).resolve().parents[2]/"config.yaml"
 
@@ -72,12 +71,7 @@ def build_algo_config(algorithm: str | None = None, overrides: dict | None = Non
         algo_cfg.update(overrides)
     
     if algorithm == "ppo":
-        config = _apply_common(PPOConfig(), cfg).rl_module(
-            rl_module_spec = RLModuleSpec(
-                module_class=ManipulationPPOModule,
-                model_config = cfg["model"],
-            )     
-        ).training(
+        config = _apply_common(PPOConfig(), cfg).training(
             lr                            = algo_cfg["lr"],
             gamma                         = algo_cfg["gamma"],
             clip_param                    = algo_cfg["clip_param"],
@@ -90,12 +84,7 @@ def build_algo_config(algorithm: str | None = None, overrides: dict | None = Non
         )
     
     elif algorithm == "sac":
-                config = _apply_common(SACConfig(), cfg).rl_module(
-            rl_module_spec=RLModuleSpec(
-                module_class=ManipulationSACModule,
-                model_config=cfg["model"],
-            )
-        ).training(
+            config = _apply_common(SACConfig(), cfg).training(
             lr                            = algo_cfg["lr"],
             gamma                         = algo_cfg["gamma"],
             tau                           = algo_cfg["tau"],
