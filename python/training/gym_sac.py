@@ -34,7 +34,7 @@ def main():
     ray.init()
  
     overrides = load_best_overrides(cfg["algorithm"]) if args.best else None
-    algo = build_algo_config(overrides=overrides).build()
+    algo = build_algo_config(algorithm="sac", overrides=overrides).build()
  
     for i in range(cfg["training"]["max_iterations"]):
         result = algo.train()

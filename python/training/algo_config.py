@@ -35,7 +35,8 @@ def make_env(cfg):
         n_obstacles             = cfg.get("n_obstacles",                          3),
         reward_scale_options    = cfg.get("reward_scale_options",              None),
         randomization_options   = cfg.get("randomization_options",             None),
-        is_eval                 =   cfg.get("is_eval",                        False),
+        is_eval                 = cfg.get("is_eval",                        False),
+        max_episode_steps       = cfg.get("max_episode_steps",              1000),
     )
 
 register_env("Manipulation-v0", make_env)

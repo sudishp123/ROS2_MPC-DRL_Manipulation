@@ -47,6 +47,7 @@ class Manipulation(gym.Env):
                  visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False,
                  n_obstacles: int = 3,
+                 max_episode_steps: int = 1000,
                  ):
         """
         Arguments:
@@ -69,6 +70,7 @@ class Manipulation(gym.Env):
         self.height = height
         self.is_eval = is_eval
         self.n_obstacles = n_obstacles
+        self.max_episode_steps = max_episode_steps
 
         #TODO - initialize and add counters for these
         self._qdot_norm_prev = 0.0
@@ -272,12 +274,15 @@ class Manipulation(gym.Env):
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()
-        pos_err = nobs["state"][0:3]
+        pos_err = nobs[0:3]
         d_pos = float(np.linalg.norm(pos_err))
 
         goal_cond = (d_pos < self.pos_threshold)
         collision_cond = self.nearest_obstacle < self.collision_thresh
         term = goal_cond or collision_cond
+
+        self.step_count += 1
+        truncated = self.step_count >= self.max_episode_steps
 
         if goal_cond:
             rew = self.rew_target_scale
@@ -299,7 +304,7 @@ class Manipulation(gym.Env):
         if self.render_mode == "human":
             self.render()
         
-        return nobs, rew, term, False, info
+        return nobs, rew, term, truncated, info
 
     # reset:
     def reset(self, seed=None, options=None):
@@ -347,7 +352,7 @@ class Manipulation(gym.Env):
         mj.mj_forward(self.model, self.data)
 
         ob = self._get_obs()
-        self.d_pos_last = float(np.linalg.norm(ob["state"][0:3]))
+        self.d_pos_last = float(np.linalg.norm(ob))
         self.action_last = np.zeros(self.action_space.shape)
         return ob
         
