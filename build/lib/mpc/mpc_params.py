@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-CONFIG_PATH = Path(__file__).resolve().parents[2]/"config/yaml"
+CONFIG_PATH = Path(__file__).resolve().parents[2]/"config.yaml"
 
 @dataclass
 class MPCParams:

@@ -50,6 +50,11 @@
         "gravity"       : [0, 0, -9.81]
     },
 
+    "reward_settigs":{
+        "pos_threshold": 0.02,
+        "safe_distance": 0.15
+    },
+
     "robot_footprint_settings" : {
         "name" : "robot_footprint",
         "radius" : 0.15,

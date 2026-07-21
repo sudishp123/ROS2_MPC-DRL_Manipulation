@@ -1,5 +1,5 @@
 import json
-from python.envs.env_creation import MakeEnv
+from envs.env_creation import MakeEnv
 
 # load params
 with open("/home/sudhishp/ROS2_MPC+DRL_Manipulation/python/envs/environment_params.json") as f:

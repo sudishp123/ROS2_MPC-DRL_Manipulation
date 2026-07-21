@@ -22,6 +22,7 @@ def _collision_geom_size(spec:dict) -> list:
     box: [half_x, half_y, half_z] 
     """
 
+    # Collision Geometries - simpler than the urdf file for physics based contact dynamics
     gtype = spec["type"]
     if gtype == "sphere":
         return [spec["radius"], 0.0, 0.0]
@@ -53,8 +54,8 @@ class MakeEnv:
         # add params to self:
         self.params = params
 
-        # paths:
-        self.base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Goes to Root of the folder
+         # paths:
+        self.base_path = self.base_path = os.getcwd()                               # Goes to Root of the folder
         self.mesh_dir  = os.path.join(self.base_path, 'assets','jetcobot','meshes') # Can change jetcobot to another folder name
 
         ### OBJECT PARAMETERS ###
@@ -322,9 +323,9 @@ class MakeEnv:
             act.trntype = mj.mjtTrn.mjTRN_JOINT
             act.target = name
             act.gaintype = mj.mjtGain.mjGAIN_FIXED
-            act.gainprm = [10.0, 0.0, 0.0]
+            act.gainprm = [10.0, 0.0, 0.0] + [0.0]*7
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
-            act.biasprm = [0.0, -10.0, 0.0]
+            act.biasprm = [0.0, -10.0, 0.0] + [0.0]*7
             act.ctrlrange = [-self.qdot_limit, self.qdot_limit]
             act.ctrllimited = True            
         
@@ -443,13 +444,14 @@ class MakeEnv:
         Responsible -> making the ``spec`` and applying the defauly settings (options, visual, lightining, camera, skybox, plane, walls)
         adding in the manipulator (robot), actuators, sensors, targets and obstacles and then compiling the ``spec`` into a usable ``model``
         """
-        #TODO: Add make_env environment (the main function)
-
         # initialize the spec:
         self.make_spec()
 
         # add the robot:
         self.add_robot(robot_pos = [robot_pos[0], robot_pos[1], self.robot_footprint_height])
+
+        # add actuators:
+        self.add_actuators()
 
         # add sensors:
         self.add_sensors()
@@ -496,4 +498,6 @@ class MakeEnv:
             while self.viewer.is_running():
                 mj.mj_step(self.model, self.data)
                 self.viewer.sync()
+
+
         

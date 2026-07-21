@@ -14,9 +14,8 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray.tune.registry import register_env
 
 from envs.manipulation import Manipulation
-from train.rl_modules import ManipulationPPOModule, ManipulationSACModule
 
-CONFIG_PATH = Path(__file__).resolve().parents[1]/"config.yaml"
+CONFIG_PATH = Path(__file__).resolve().parents[2]/"config.yaml"
 
 def load_yaml_config() -> dict:
     with open(CONFIG_PATH) as f:
@@ -36,7 +35,8 @@ def make_env(cfg):
         n_obstacles             = cfg.get("n_obstacles",                          3),
         reward_scale_options    = cfg.get("reward_scale_options",              None),
         randomization_options   = cfg.get("randomization_options",             None),
-        is_eval                 =   cfg.get("is_eval",                        False),
+        is_eval                 = cfg.get("is_eval",                        False),
+        max_episode_steps       = cfg.get("max_episode_steps",              1000),
     )
 
 register_env("Manipulation-v0", make_env)
@@ -72,12 +72,7 @@ def build_algo_config(algorithm: str | None = None, overrides: dict | None = Non
         algo_cfg.update(overrides)
     
     if algorithm == "ppo":
-        config = _apply_common(PPOConfig(), cfg).rl_module(
-            rl_module_spec = RLModuleSpec(
-                module_class=ManipulationPPOModule,
-                model_config = cfg["model"],
-            )     
-        ).training(
+        config = _apply_common(PPOConfig(), cfg).training(
             lr                            = algo_cfg["lr"],
             gamma                         = algo_cfg["gamma"],
             clip_param                    = algo_cfg["clip_param"],
@@ -90,12 +85,7 @@ def build_algo_config(algorithm: str | None = None, overrides: dict | None = Non
         )
     
     elif algorithm == "sac":
-                config = _apply_common(SACConfig(), cfg).rl_module(
-            rl_module_spec=RLModuleSpec(
-                module_class=ManipulationSACModule,
-                model_config=cfg["model"],
-            )
-        ).training(
+            config = _apply_common(SACConfig(), cfg).training(
             lr                            = algo_cfg["lr"],
             gamma                         = algo_cfg["gamma"],
             tau                           = algo_cfg["tau"],

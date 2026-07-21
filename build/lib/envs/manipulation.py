@@ -47,6 +47,7 @@ class Manipulation(gym.Env):
                  visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False,
                  n_obstacles: int = 3,
+                 max_episode_steps: int = 1000,
                  ):
         """
         Arguments:
@@ -69,6 +70,7 @@ class Manipulation(gym.Env):
         self.height = height
         self.is_eval = is_eval
         self.n_obstacles = n_obstacles
+        self.max_episode_steps = max_episode_steps
 
         #TODO - initialize and add counters for these
         self._qdot_norm_prev = 0.0
@@ -120,12 +122,6 @@ class Manipulation(gym.Env):
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
 
-        # overhead camera
-        self.cam_width = 84
-        self.cam_height = 84
-        self.cam_id = self.model.camera("overhead_camera").id
-        self._renderer = mj.Renderer(self.model, height=self.cam_height, width=self.cam_height)
-
         # cache body/sensor IDs
         self.ee_body_id = self.model.body("6_Link").id
         self.target_body_id = self.model.body("target").id
@@ -168,10 +164,6 @@ class Manipulation(gym.Env):
         self.data.qpos[:] = qpos
         self.data.qvel[:] = qvel
         mj.mj_forward(self.model, self.data)
-
-    def _get_image(self) -> np.ndarray:
-        self._renderer.update_scene(self.data, camera=self.cam_id)
-        return self._renderer.render().copy()
         
     # action space:
     def _set_action_space(self):
@@ -179,8 +171,8 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(12, dtype=np.float32)
-        self.action_high = np.ones(12, dtype=np.float32)
+        self.action_low = np.zeros(10, dtype=np.float32)
+        self.action_high = np.ones(10, dtype=np.float32)
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
         )
@@ -224,10 +216,7 @@ class Manipulation(gym.Env):
         # obstacle distance
         low[15] = 0.0; high[15] = 2.0
 
-        self.observation_space = gym.spaces.Dict({
-        "state": gym.spaces.Box(low=low, high=high, dtype=np.float32),
-        "image": gym.spaces.Box(low=0, high=255, shape=(self.cam_height, self.cam_width, 3),  dtype=np.uint8)
-        })
+        self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
 
 
     # obtain observations:
@@ -252,10 +241,7 @@ class Manipulation(gym.Env):
 
         state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
 
-        return {
-            "state": state,
-            "image": self._get_image()
-        }
+        return state
     
     # nearest obstacle distance
 
@@ -271,7 +257,7 @@ class Manipulation(gym.Env):
 
         theta_s = action[0:3]
         theta_r = action[3:9]
-        theta_g = action[9:12]
+        theta_g = action[9:10]
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
         q               = self.data.sensordata[self._q_slice]
@@ -288,12 +274,15 @@ class Manipulation(gym.Env):
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()
-        pos_err = nobs["state"][0:3]
+        pos_err = nobs[0:3]
         d_pos = float(np.linalg.norm(pos_err))
 
         goal_cond = (d_pos < self.pos_threshold)
         collision_cond = self.nearest_obstacle < self.collision_thresh
         term = goal_cond or collision_cond
+
+        self.step_count += 1
+        truncated = self.step_count >= self.max_episode_steps
 
         if goal_cond:
             rew = self.rew_target_scale
@@ -315,7 +304,7 @@ class Manipulation(gym.Env):
         if self.render_mode == "human":
             self.render()
         
-        return nobs, rew, term, False, info
+        return nobs, rew, term, truncated, info
 
     # reset:
     def reset(self, seed=None, options=None):
@@ -363,7 +352,7 @@ class Manipulation(gym.Env):
         mj.mj_forward(self.model, self.data)
 
         ob = self._get_obs()
-        self.d_pos_last = float(np.linalg.norm(ob["state"][0:3]))
+        self.d_pos_last = float(np.linalg.norm(ob))
         self.action_last = np.zeros(self.action_space.shape)
         return ob
         
@@ -377,6 +366,39 @@ class Manipulation(gym.Env):
         self._renderer.close()   
 
     # helper functions:
+    def _sample_obstacle_positions(
+            self,
+            target_pos: np.ndarray,
+            n: int,
+            min_target_dist: float = 0.08,
+            min_obs_sep: float = 0.10,
+            max_tries: int = 100,
+    ) -> list[np.ndarray]:
+        """
+        Rejection-samples n obstacle positions inside the workspace bounds, keeping each obstalce 
+        away from the target (so the goal stays reachable) and away from other obstalces (so they don't overlap)
+
+        Falls back to the last candidate if max_tries is exceeded, so this always returns exactly n positions
+        """
+        target_pos = np.asarray(target_pos, dtype=np.float64)
+        positions: list[np.ndarray] = []
+
+        for _ in range(n):
+            candidate = None
+            for _attempt in range(max_tries):
+                candidate = self.np_random.uniform(
+                    low=self.target_bound_low, high=self.target_bound_high
+                )
+
+                if np.linalg.norm(candidate - target_pos) < min_target_dist:
+                    continue
+                if any(np.linalg.norm(candidate - p) < min_obs_sep for p in positions):
+                    continue
+                break
+            positions.append(candidate)
+
+        return positions                      
+
     def _compute_reward(self, pos_err_norm, poss_err_norm_prev, qdot, g_hat):
         """
         r1: relative change in EE pose error (setpoint control)

@@ -22,6 +22,7 @@ def _collision_geom_size(spec:dict) -> list:
     box: [half_x, half_y, half_z] 
     """
 
+    # Collision Geometries - simpler than the urdf file for physics based contact dynamics
     gtype = spec["type"]
     if gtype == "sphere":
         return [spec["radius"], 0.0, 0.0]
@@ -53,8 +54,8 @@ class MakeEnv:
         # add params to self:
         self.params = params
 
-        # paths:
-        self.base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Goes to Root of the folder
+         # paths:
+        self.base_path = self.base_path = os.getcwd()                               # Goes to Root of the folder
         self.mesh_dir  = os.path.join(self.base_path, 'assets','jetcobot','meshes') # Can change jetcobot to another folder name
 
         ### OBJECT PARAMETERS ###
@@ -497,4 +498,6 @@ class MakeEnv:
             while self.viewer.is_running():
                 mj.mj_step(self.model, self.data)
                 self.viewer.sync()
+
+
         
