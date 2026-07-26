@@ -12,8 +12,12 @@ python/mpc/__init__.py
 python/mpc/mpc_params.py
 python/mpc/nmpc_controller.py
 python/mpc/jacobian/__init__.py
+python/mpc/jacobian/generic_jacobian_casadi.py
 python/mpc/jacobian/jacobian.py
 python/mpc/jacobian/jetcobot_jacobian_casadi.py
+python/mpc/jacobian/utils/__init__.py
+python/mpc/jacobian/utils/robot_description.py
+python/mpc/jacobian/utils/urdf_parser.py
 python/training/__init__.py
 python/training/algo_config.py
 python/training/gym_ppo.py

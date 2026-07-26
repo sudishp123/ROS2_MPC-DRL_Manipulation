@@ -1,7 +1,7 @@
 import roboticstoolbox as rtb
 import numpy as np
 
-robot = rtb.ERobot.URDF("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/urdf/jetcobot.urdf")
+robot = rtb.ERobot.URDF("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf")
 robot_6dof = robot.ets(end=robot.link_dict["6_Link"])
 
 

@@ -20,8 +20,11 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(_ENVS_DIR))
 
 class Manipulation(gym.Env):
     """
-    class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
-
+    class constructor to do the following:
+        -  initialize the environment (Mujoco model and data)
+        -  instantiate the NMPC controller
+        -  iitializes all the parameters  from json file
+    
     Architecture:
     DRL Policy -> NMPC cost weights (action)
     NMPC -> joint velocity commands (qdot)
@@ -38,7 +41,7 @@ class Manipulation(gym.Env):
     def __init__(self,
                  json_file: str="environment_params.json",
                  frame_skip: int = 5,
-                 render_mode: str = "rgb_array",
+                 render_mode: str = "rgb_arra",
                  width: int = 480,
                  height: int = 480,
                  reward_scale_options: dict[str, float] | None = None,
@@ -51,13 +54,14 @@ class Manipulation(gym.Env):
                  ):
         """
         Arguments:
-        json_file:                a string that contains the name of the environment parameters json file, which contains
+        json_file:                  a string that contains the name of the environment parameters json file, which contains
                                   compiler info, visual settings, and element settings (ground, wall, light, robot, target)
         
-        render_mode:            a string that specifies the MuJoCo renderer mode, such as ``human``, ``rgb_array``, or ``None``
-        width:                  width of the rendering window
-        height:                 height of the rendering window
-        reward_scale_options:   a dictionary containing the value for each of the reward scale 
+        render_mode:                a string that specifies the MuJoCo renderer mode, such as ``human``, ``rgb_array``, or ``None``
+        width:                      width of the rendering window
+        height:                     height of the rendering window
+        reward_scale_options:       a dictionary containing the value for each of the reward scale 
+        obstacle_options:           a dictioary stating the number of obstacle   
         """
         # load the simulation parameters:
         json_path = os.path.join(_ENVS_DIR, json_file)
@@ -72,12 +76,9 @@ class Manipulation(gym.Env):
         self.n_obstacles = n_obstacles
         self.max_episode_steps = max_episode_steps
 
-        #TODO - initialize and add counters for these
         self._qdot_norm_prev = 0.0
         self.step_count = 0
-        #-------------------------------------------------
 
-        
         self.obstacle_radius = params["obstacle_settings"]["size_high"]
 
         # reward scales
@@ -89,10 +90,10 @@ class Manipulation(gym.Env):
         self.rew_time            = rs.get("rew_time", -0.5)
 
         # thresholds
-        self.pos_threshold    = 0.02
+        self.pos_threshold    = params["reward_settings"]["pos_threshold"]
         self.collision_thresh = params["obstacle_settings"]["allowance"]
-        self.d_safe           = 0.15
-
+        self.d_safe           = params["reward_settigs"]["safe_distace"]
+        
         # episode counters
         self.episode_counter    = 0
         rand                    = randomization_options or {}
