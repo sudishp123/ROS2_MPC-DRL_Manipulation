@@ -14,22 +14,28 @@ import yaml
 import ray
 
 from training.algorithms import build_algo_config, load_yaml_config
+from ray import tune
 
 def main():
     cfg = load_yaml_config()
+    algo_config = build_algo_config(algorithm = "sac")
     ray.init()
 
-    algo = build_algo_config(algorithm = "sac").build()
+    tuner = tune.Tuner(
+        "SAC",
+        param_space=algo_config,
+        run_config=tune.RunConfig(
+            name="jetcobot_sac_run1",
+            storage_path = cfg["training"]["storage_path"],
+            stop=cfg["training"]["max_iterations"],
+            checkpoint_config=tune.CheckpointConfig(
+                checkpoint_frequency=25,
+                checkpoint_at_end=True,
+            ),
+        ),
+    )
 
-    for i in range(cfg["training"]["max_iterations"]):
-        result = algo.train()
-        print(
-            f"iter {i:4d} | "
-            f"return_mean = {result["env_runners"]["episode_return_mean"]:.2f}"
-        )
-        if i % cfg["training"]["checkpoint_freq"] == 0:
-            ckpt = algo.save()
-            print(f" checkpoint saved: {ckpt.checkpoint.path}")
+    result_grid = tuner.fit()  
 
 if __name__ == "__main__":
     main()

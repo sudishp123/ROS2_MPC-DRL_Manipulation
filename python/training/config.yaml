@@ -23,7 +23,7 @@ resources:
   num_gpus: 1
   num_env_runners: 4
   num_envs_per_env_runner: 4
-  num_cpus_per_env_runner: 1
+  num_cpus_per_env_runner: 4
 
 mpc:
   N: 5                    # prediction horizon (steps)
@@ -72,7 +72,7 @@ sac:
   num_steps_sampled_before_learning_starts: 5000
 
 training:
-  max_iterations: 500
+  max_iterations: {"training_iteration": 500}
   checkpoint_freq: 10
   storage_path: /home/sudhishp/ROS2_MPC+DRL_Manipulation/results   
   experiment_name: jetcobot_${algorithm}
