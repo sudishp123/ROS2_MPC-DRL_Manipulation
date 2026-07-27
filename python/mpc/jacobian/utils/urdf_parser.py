@@ -56,10 +56,6 @@ def parse_robot_description(
     default_vel_limit: float = DEFAULT_VEL_LIMIT,
 ) -> RobotDescription:
     # Read as raw bytes and use from_xml_string rather than from_xml_file:
-    # some urdf_parser_py builds (e.g. the one shipped with ROS2 Jazzy) read
-    # the file as text in from_xml_file, which lxml rejects if the URDF has
-    # an <?xml ... encoding="utf-8"?> declaration ("Unicode strings with
-    # encoding declaration are not supported"). Bytes avoid that entirely.
     with open(urdf_path, "rb") as f:
         xml_bytes = f.read()
     robot = URDF.from_xml_string(xml_bytes)
