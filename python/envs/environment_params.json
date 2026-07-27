@@ -50,7 +50,7 @@
         "gravity"       : [0, 0, -9.81]
     },
 
-    "reward_settigs":{
+    "reward_settings":{
         "pos_threshold": 0.02,
         "safe_distance": 0.15
     },

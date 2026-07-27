@@ -2,6 +2,8 @@ import numpy as np
 import casadi as ca
 from hilo_mpc import NMPC, SimpleControlLoop
 from mpc.jacobian.generic_jacobian_casadi import build_kinematics
+from mpc.jacobian.utils.urdf_parser import parse_robot_description
+
 
 class NMPCController:
     """NMPC Based on Baselizadeh et al. (2024)
@@ -16,7 +18,8 @@ class NMPCController:
         self.np = 3 # Cartersian Position (x,y,z)
 
     #----------------Load Kinematics----------------
-        self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics()
+        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
+        self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics(desc)
 
     #TODO - Generalize the joint limits instead of hardcoding 
         self.q_min = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])

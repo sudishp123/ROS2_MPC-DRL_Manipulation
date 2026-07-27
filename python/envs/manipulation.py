@@ -92,7 +92,7 @@ class Manipulation(gym.Env):
         # thresholds
         self.pos_threshold    = params["reward_settings"]["pos_threshold"]
         self.collision_thresh = params["obstacle_settings"]["allowance"]
-        self.d_safe           = params["reward_settigs"]["safe_distace"]
+        self.d_safe           = params["reward_settings"]["safe_distance"]
         
         # episode counters
         self.episode_counter    = 0
