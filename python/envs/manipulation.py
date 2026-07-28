@@ -7,7 +7,6 @@ from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.registration import register
 from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-
 import os, json, sys
 
 from envs.env_creation import MakeEnv
@@ -41,13 +40,11 @@ class Manipulation(gym.Env):
     def __init__(self,
                  json_file: str="environment_params.json",
                  frame_skip: int = 5,
-                 render_mode: str = "rgb_arra",
+                 render_mode: str = "rgb_array",
                  width: int = 480,
                  height: int = 480,
                  reward_scale_options: dict[str, float] | None = None,
                  randomization_options: dict[str,float] | None = None,
-                 obstacle_options: dict[str, int] = {"n_obstacles":0},
-                 visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False,
                  n_obstacles: int = 3,
                  max_episode_steps: int = 1000,
@@ -364,7 +361,6 @@ class Manipulation(gym.Env):
     def close(self):
         if self.mujoco_renderer is not None:
             self.mujoco_renderer.close()
-        self._renderer.close()   
 
     # helper functions:
     def _sample_obstacle_positions(
