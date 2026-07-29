@@ -6,6 +6,7 @@ import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.registration import register
 from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
 import os, json, sys
 
@@ -172,7 +173,7 @@ class Manipulation(gym.Env):
         self.action_low = np.zeros(10, dtype=np.float32)
         self.action_high = np.ones(10, dtype=np.float32)
         self.action_space = gym.spaces.Box(
-            low=self.action_low, high=self.action_high, dtype=np.float32
+            low=self.action_low, high=self.action_high*100, dtype=np.float32
         )
 
     # initialize observation space:
@@ -202,9 +203,12 @@ class Manipulation(gym.Env):
         # pos error
         low[0:3] = -0.8 ; high[0:3] = 0.8
 
+
+        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
+
         # joint limits from params
-        j_low = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
-        j_high = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
+        j_low = desc.q_min
+        j_high = desc.q_max
         low[3:9] = j_low; high[3:9] = j_high
 
         # joint velocities
@@ -262,11 +266,16 @@ class Manipulation(gym.Env):
         p_des           = self.data.xpos[self.target_body_id]
         ee_pos          = self.data.sensordata[self._ee_pos_slice]
 
-        T_obs           = min(
-            [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
-            key=lambda pos:np.linalg.norm(pos-ee_pos)
-            ).copy()
+        if self.n_obstacles != 0:
+            T_obs           = min(
+                        [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
+                        key=lambda pos:np.linalg.norm(pos-ee_pos)
+                        ).copy()
+        else:
+            T_obs = 0
         qdot_cmd, info  = self.nmpc.solve(q, p_des, T_obs)
+
+        
 
         self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)

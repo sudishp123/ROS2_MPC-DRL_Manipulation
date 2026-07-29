@@ -3,7 +3,7 @@ from envs.manipulation import Manipulation
 
 env = Manipulation(
     render_mode="human",
-    n_obstacles=10,
+    n_obstacles=1,
     max_episode_steps=1000,
 )
 
@@ -12,7 +12,7 @@ print("obs shape:", obs.shape, "action space", env.action_space)
 
 for i in range(1000):
     action = env.action_space.sample() # random NMPC weight vector
-    print (action)          
+    # print (action)          
     obs, rew, term, trunc, info = env.step(action)
     time.sleep(0.002)                            # slow down so the window is watchable
 

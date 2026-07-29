@@ -4,7 +4,6 @@ from hilo_mpc import NMPC, SimpleControlLoop
 from mpc.jacobian.generic_jacobian_casadi import build_kinematics
 from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
-
 class NMPCController:
     """NMPC Based on Baselizadeh et al. (2024)
     N: prediction horizon of 5
@@ -22,8 +21,8 @@ class NMPCController:
         self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics(desc)
 
     #TODO - Generalize the joint limits instead of hardcoding 
-        self.q_min = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
-        self.q_max = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
+        self.q_min = desc.q_min
+        self.q_max = desc.q_max
 
         self.qdot_min = np.full(6, -4.0) #Locked Motor speed is 52 RPM = 5.445 rads/s so haing a 75% operating limit
         self.qdot_max = np.full(6, 4.0)
@@ -147,6 +146,10 @@ class NMPCController:
             g += [Q[k+1] - q_next_pred]
             lbg += [0.0] * nq
             ubg += [0.0] * nq
+
+        g += [Q[0] - q_init]
+        lbg += [0.0]* nq
+        ubg += [0.0] * nq
 
         #----------------Collision Avoidance Constraints----------------
         # g^j_k(q_k, T_k)  + theta^j_g <= zeta^j_k
