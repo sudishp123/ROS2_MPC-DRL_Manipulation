@@ -275,8 +275,6 @@ class Manipulation(gym.Env):
             T_obs = 0
         qdot_cmd, info  = self.nmpc.solve(q, p_des, T_obs)
 
-        
-
         self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
@@ -285,7 +283,7 @@ class Manipulation(gym.Env):
         d_pos = float(np.linalg.norm(pos_err))
 
         goal_cond = (d_pos < self.pos_threshold)
-        collision_cond = self.nearest_obstacle < self.collision_thresh
+        collision_cond = self.nearest_obstacle < self.collision_thresh 
         term = goal_cond or collision_cond
 
         self.step_count += 1
@@ -485,6 +483,7 @@ class Manipulation(gym.Env):
                     if dist < min_dist_over_obstacles:
                         min_dist_over_obstacles = dist
                     g_hat[link_idx] = min_dist_over_obstacles
+
             except:
                 g_hat[link_idx] = np.inf # body not found - skip
         return g_hat

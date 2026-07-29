@@ -1,4 +1,5 @@
 import time
+import glfw
 from envs.manipulation import Manipulation
 
 env = Manipulation(
@@ -9,6 +10,8 @@ env = Manipulation(
 
 obs, info = env.reset()
 print("obs shape:", obs.shape, "action space", env.action_space)
+
+# glfw.init()
 
 for i in range(1000):
     action = env.action_space.sample() # random NMPC weight vector

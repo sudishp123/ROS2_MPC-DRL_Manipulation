@@ -325,7 +325,7 @@ class MakeEnv:
             act.gaintype = mj.mjtGain.mjGAIN_FIXED
             act.gainprm = [10.0, 0.0, 0.0] + [0.0]*7
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
-            act.biasprm = [0.0, -10.0, 0.0] + [0.0]*7
+            act.biasprm = [0.0, 0.0, -10.0] + [0.0]*7
             act.ctrlrange = [-self.qdot_limit, self.qdot_limit]
             act.ctrllimited = True            
         

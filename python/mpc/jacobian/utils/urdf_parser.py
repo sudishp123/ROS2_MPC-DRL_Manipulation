@@ -3,10 +3,10 @@ urdf_parser.py
 
 Walks a URDF's kinematic chain from base_link to ee_link and produces a
 RobotDescription — the generic replacement for hand-transcribed ETS
-tables like the one in mpc/jacobian/jetcobot_jacobian_casadi.py.
+tables.
 
 Consecutive `fixed` joints are folded into the offset of the next
-movable joint (matching how your ETS table already bundles mounting
+movable joint (matching how ETS table already bundles mounting
 offsets before each active joint). Any fixed joints found *after* the
 last movable joint become the end-effector / tool offset.
 
@@ -111,7 +111,7 @@ def parse_robot_description(
 
         # this movable joint's own motion resets what's "pending" for the next one
         R_pending, p_pending = np.eye(3), np.zeros(3)
-
+        
     # anything left over after the last movable joint is the end-effector offset
     R_ee, p_ee = R_pending, p_pending
 
@@ -132,7 +132,6 @@ def parse_robot_description(
         base_link=base_link,
         ee_link=ee_link,
     )
-
 
 if __name__ == "__main__":
     import sys
