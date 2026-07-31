@@ -19,6 +19,7 @@ class NMPCController:
     #----------------Load Kinematics----------------
         desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
         self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics(desc)
+        # print(self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin)
 
     #TODO - Generalize the joint limits instead of hardcoding 
         self.q_min = desc.q_min
@@ -30,7 +31,7 @@ class NMPCController:
         #Terminal Cost Weight S_N - fixed, based on paper
         self.S_N = np.diag([10.0, 10.0, 10.0])
 
-        #Defauly NMPC parameter (DRL will takeover during runtime)
+        #Default NMPC parameter (DRL will takeover during runtime)
         #theta_S: diagonal weights on Cartesian error (3,) - paper uses 6 for pose error
         #theta_R: diagonal weights on joint velocities (6,)
         #theta_g: collision avoidance margin per link (N_links)

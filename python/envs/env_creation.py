@@ -327,7 +327,8 @@ class MakeEnv:
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
             act.biasprm = [0.0, 0.0, -10.0] + [0.0]*7
             act.ctrlrange = [-self.qdot_limit, self.qdot_limit]
-            act.ctrllimited = True            
+            act.ctrllimited = True
+            
         
 
     def add_sensors(self):
@@ -483,6 +484,8 @@ class MakeEnv:
 
         """
         self.data = mj.MjData(self.model)
+        self.data.ctrl[:] = 0.0
+
 
         # launch a passive window using the model and the data contained within:
         with mujoco.viewer.launch_passive(self.model, self.data) as self.viewer:
