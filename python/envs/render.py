@@ -14,4 +14,9 @@ env.make_env(
                [-0.3, 0.3, 0.1]]
 )
 
+# for j, name in enumerate(env.joint_names):
+#     body_id = env.model.joint(name).bodyid[0]
+#     print(name, env.model.body_mass[body_id])
+
+
 env.render()

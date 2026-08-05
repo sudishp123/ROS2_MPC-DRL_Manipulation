@@ -65,6 +65,21 @@ def _joints_from_base(robot, base_link):
     print(ordered_joint_names)
     return ordered_joint_names
 
+def _intertial(link):
+    if link is None or link.inertial is None:
+        return None
+    inert = link.inertial
+    origin_xyz = list(inert.origin.xyz) if inert.origin and inert.origin.xyz else [0.0,0.0,0.0]
+    origin_rpy = list(inert.origin.rpy) if inert.origin and inert.origin.rpy else [0.0,0.0,0.0]
+    i = inert.inertia
+    return {
+        "mass": inert.mass,
+        "origin_xyz": origin_xyz,
+        "origin_rpy": origin_rpy,
+        "ixx": i.ixx, "iyy": i.iyy, "izz": i.izz,
+        "ixy": i.ixy, "ixz": i.ixz, "iyz": i.iyz,
+    }
+
 
 def parse_robot_settings(
         urdf_path: str,
@@ -106,6 +121,7 @@ def parse_robot_settings(
                 "lower"         : lower,
                 "upper"         : upper,
                 "collision"     : collision,
+                "inertial"      : _intertial(child_link)     
             })
 
         elif joint.type == "fixed":
@@ -116,6 +132,7 @@ def parse_robot_settings(
                 "origin_rpy"    : origin_rpy,
                 "parent"        : joint.parent,
                 "collision"     : collision,
+                "inertial"      : _intertial(child_link)
             })
 
         else:

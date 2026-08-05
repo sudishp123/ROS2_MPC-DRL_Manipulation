@@ -286,6 +286,11 @@ class MakeEnv:
             body = parent_body.add_body(name=jd["link_name"],
                                         pos=jd["origin_xyz"],
                                         euler=jd["origin_rpy"])
+            inert               = jd["inertial"]
+            body.mass           = inert["mass"]
+            body.ipos           = inert["origin_xyz"]
+            body.fullinertia    = [inert["ixx"], inert["iyy"], inert["izz"],
+                                inert["ixy"], inert["ixz"], inert["iyz"]]
             
             
             body.add_joint(name=jd["joint_name"],
@@ -321,6 +326,12 @@ class MakeEnv:
             body = parent_body.add_body(name=fl["link_name"],
                                         pos=fl["origin_xyz"],
                                         euler=fl["origin_rpy"])
+
+            inert               = fl["inertial"]
+            body.mass           = inert["mass"]
+            body.ipos           = inert["origin_xyz"]
+            body.fullinertia    = [inert["ixx"], inert["iyy"], inert["izz"],
+                                inert["ixy"], inert["ixz"], inert["iyz"]]
             
             # visual geom: the actual mesh, no collision:
             body.add_geom(name=f"{fl['link_name']}_visual",
@@ -356,7 +367,7 @@ class MakeEnv:
             act.gaintype = mj.mjtGain.mjGAIN_FIXED
             act.gainprm  = [kp, 0.0, 0.0] + [0.0]*7
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
-            act.biasprm  = [-kp, 0.0, -2*np.sqrt(kp)] + [0.0]*7
+            act.biasprm  = [0.0, -kp, -2*np.sqrt(kp)] + [0.0]*7
             act.ctrlrange = [self.q_min[j], self.q_max[j]]
             act.ctrllimited = True
             
@@ -483,7 +494,7 @@ class MakeEnv:
         self.add_robot(robot_pos = [robot_pos[0], robot_pos[1], self.robot_footprint_height])
 
         # add actuators:
-        self.add_actuators(5.0)
+        self.add_actuators(50.0)
 
         # add sensors:
         self.add_sensors()
@@ -515,6 +526,9 @@ class MakeEnv:
 
         """
         self.data = mj.MjData(self.model)
+        self.data.ctrl[5:6] = 3.05
+
+        print(self.data.ctrl[:])
 
         # launch a passive window using the model and the data contained within:
         with mujoco.viewer.launch_passive(self.model, self.data) as self.viewer:
