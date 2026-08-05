@@ -250,10 +250,10 @@
                 "collision": {
                     "type": "capsule",
                     "radius": 0.025,
-                    "half_length": 0.035,
+                    "half_length": 0.015,
                     "pos": [
                         0,
-                        -0.023,
+                        -0.03,
                         0.008
                     ],
                     "rpy": [

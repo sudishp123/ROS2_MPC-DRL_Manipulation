@@ -37,7 +37,7 @@ def _collision_geom_size(spec:dict) -> list:
 # define main class for creating the environment:
 class MakeEnv:
     """
-    This class is for creating the environment with robot manipulato9r using the python API for MuJoCo.
+    This class is for creating the environment with robot manipulator using the python API for MuJoCo.
 
     This file is responsible -> static strucutre of joint angles and obstacle position
     """
@@ -72,6 +72,17 @@ class MakeEnv:
 
         # env settings:
         self.env_name = params["env_settings"]["name"]
+
+        # floor texture settings:
+        self.floor_texture_name     = "groundplane"
+        self.floor_texture_type     = mj.mjtTexture.mjTEXTURE_2D
+        self.floor_texture_builtin  = mujoco.mjtBuiltin.mjBUILTIN_CHECKER
+        self.floor_texture_mark     = mj.mjtMark.mjMARK_EDGE
+        self.floor_texture_markrgb  = [0.8, 0.8, 0.8]
+        self.floor_texture_rgb1     = [0.2, 0.3, 0.4]
+        self.floor_texture_rgb2     = [0.1, 0.2, 0.3]
+        self.floor_texture_width    = 300
+        self.floor_texture_height   = 300    
 
         # ground plane settings:
         self.ground_name = params["ground_settings"]["name"]
@@ -200,6 +211,24 @@ class MakeEnv:
         # add camera:
         self.spec.worldbody.add_camera(name = self.camera_name,
                                        pos = self.camera_pos)
+
+        self.spec.add_texture(
+            name    = self.floor_texture_name,
+            type    = self.floor_texture_type,
+            builtin = self.floor_texture_builtin,
+            mark    = self.floor_texture_mark,
+            markrgb = self.floor_texture_markrgb,
+            rgb1    = self.floor_texture_rgb1,
+            rgb2    = self.floor_texture_rgb2,
+            width   = self.floor_texture_width,
+            height  = self.floor_texture_height,
+        )
+
+        self.mat = self.spec.add_material(name="groundplane")
+        self.mat.textures[mj.mjtTextureRole.mjTEXROLE_RGB] = "groundplane"
+        self.mat.texuniform = True
+        self.mat.texrepeat = [5,5]
+        self.mat.reflectance = 0.2
         
         # add ground plane:
         self.spec.worldbody.add_geom(name = self.ground_name,
@@ -208,7 +237,8 @@ class MakeEnv:
                                      conaffinity = self.ground_conaffinity,
                                      pos = self.ground_pos,
                                      size = self.ground_size,
-                                     rgba = self.ground_rgba)
+                                     rgba = self.ground_rgba,
+                                     material = "groundplane")
         
 
     def add_robot(self, robot_pos: list):
@@ -256,6 +286,7 @@ class MakeEnv:
             body = parent_body.add_body(name=jd["link_name"],
                                         pos=jd["origin_xyz"],
                                         euler=jd["origin_rpy"])
+            
             
             body.add_joint(name=jd["joint_name"],
                            type=mj.mjtJoint.mjJNT_HINGE,
@@ -313,20 +344,20 @@ class MakeEnv:
 
         self.end_effector_body = self._body_lookup[self._fixed_links[-1]["link_name"]]
 
-    def add_actuators(self): 
+    def add_actuators(self, kp): 
         """
         This function add the actuators at each joint
         """
-        for name in self.joint_names:
+        for j, name in enumerate(self.joint_names):
             act = self.spec.add_actuator()
             act.name = f'act_{name}'
             act.trntype = mj.mjtTrn.mjTRN_JOINT
             act.target = name
             act.gaintype = mj.mjtGain.mjGAIN_FIXED
-            act.gainprm = [10.0, 0.0, 0.0] + [0.0]*7
+            act.gainprm  = [kp, 0.0, 0.0] + [0.0]*7
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
-            act.biasprm = [0.0, 0.0, -10.0] + [0.0]*7
-            act.ctrlrange = [-self.qdot_limit, self.qdot_limit]
+            act.biasprm  = [-kp, 0.0, -2*np.sqrt(kp)] + [0.0]*7
+            act.ctrlrange = [self.q_min[j], self.q_max[j]]
             act.ctrllimited = True
             
         
@@ -452,7 +483,7 @@ class MakeEnv:
         self.add_robot(robot_pos = [robot_pos[0], robot_pos[1], self.robot_footprint_height])
 
         # add actuators:
-        self.add_actuators()
+        self.add_actuators(5.0)
 
         # add sensors:
         self.add_sensors()
@@ -484,8 +515,6 @@ class MakeEnv:
 
         """
         self.data = mj.MjData(self.model)
-        self.data.ctrl[:] = 0.0
-
 
         # launch a passive window using the model and the data contained within:
         with mujoco.viewer.launch_passive(self.model, self.data) as self.viewer:

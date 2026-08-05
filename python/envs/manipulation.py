@@ -66,13 +66,13 @@ class Manipulation(gym.Env):
         with open (json_path) as f:
             params = json.load(f)
 
-        self.frame_skip = frame_skip
-        self.render_mode = render_mode
-        self.width = width
-        self.height = height
-        self.is_eval = is_eval
-        self.n_obstacles = n_obstacles
-        self.max_episode_steps = max_episode_steps
+        self.frame_skip         = frame_skip
+        self.render_mode        = render_mode
+        self.width              = width
+        self.height             = height
+        self.is_eval            = is_eval
+        self.n_obstacles        = n_obstacles
+        self.max_episode_steps  = max_episode_steps
 
         self._qdot_norm_prev = 0.0
         self.step_count = 0
@@ -80,12 +80,12 @@ class Manipulation(gym.Env):
         self.obstacle_radius = params["obstacle_settings"]["size_high"]
 
         # reward scales
-        rs =                       reward_scale_options or {}
-        self.rew_target_scale =    rs.get("rew_target_scale", 200.0)
-        self.rew_collision_scale = rs.get("rew_collision_scale", -100.0)
-        self.rew_dist_scale =      rs.get("rew_dist_scale", 10.0)
-        self.rew_effort_scale =    rs.get("rew_effort_scale", -0.1)
-        self.rew_time            = rs.get("rew_time", -0.5)
+        rs                          = reward_scale_options or {}
+        self.rew_target_scale       = rs.get("rew_target_scale", 200.0)
+        self.rew_collision_scale    = rs.get("rew_collision_scale", -100.0)
+        self.rew_dist_scale         = rs.get("rew_dist_scale", 10.0)
+        self.rew_effort_scale       = rs.get("rew_effort_scale", -0.1)
+        self.rew_time               = rs.get("rew_time", -0.5)
 
         # thresholds
         self.pos_threshold    = params["reward_settings"]["pos_threshold"]
@@ -100,36 +100,34 @@ class Manipulation(gym.Env):
 
         # workspace bounds
         # keep targets reachable: JetCobot max reach ~0.40 m
-        self.target_bound_low = np.array([0.1, -0.25, 0.1])
-        self.target_bound_high = np.array([0.35, 0.25, 0.35])
+        self.target_bound_low   = np.array([0.1, -0.25, 0.1])
+        self.target_bound_high  = np.array([0.35, 0.25, 0.35])
 
         # build MuJoco scene
-        initial_target = np.array([0.25, 0.0, 0.25])
-        initial_obs_positions = self._sample_obstacle_positions(
-            target_pos=initial_target, n=self.n_obstacles
-        )
+        initial_target          = np.array([0.25, 0.0, 0.25])
+        initial_obs_positions   = self._sample_obstacle_positions(target_pos=initial_target, n=self.n_obstacles)
 
         env = MakeEnv(params)
         env.make_env(
-            robot_pos = [0.0, 0.0],
-            target_pos = initial_target.tolist(),
-            obs_pos = initial_obs_positions,
+            robot_pos   = [0.0, 0.0],
+            target_pos  = initial_target.tolist(),
+            obs_pos     = initial_obs_positions,
         )
 
-        self.model = env.model
-        self.model.vis.global_.offwidth = width
-        self.model.vis.global_.offheight = height
+        self.model                          = env.model
+        self.model.vis.global_.offwidth     = width
+        self.model.vis.global_.offheight    = height
         self.data = mj.MjData(self.model)
 
         # cache body/sensor IDs
-        self.ee_body_id = self.model.body("6_Link").id
+        self.ee_body_id     = self.model.body("6_Link").id
         self.target_body_id = self.model.body("target").id
-        self.joint_ids = [self.model.joint]
+        self.joint_ids      = [self.model.joint]
 
         # sensor layout set by add_sensors():
-        self._q_slice = slice(0,6)
-        self._qdot_slice = slice(6, 12)
-        self._ee_pos_slice = slice(12, 15)
+        self._q_slice       = slice(0,6)
+        self._qdot_slice    = slice(6, 12)
+        self._ee_pos_slice  = slice(12, 15)
         self._ee_quat_slice = slice(15, 19)
 
         # spaces
@@ -145,9 +143,9 @@ class Manipulation(gym.Env):
         self.init_qvel = self.data.qvel.ravel().copy()
 
         # tracking state:
-        self.d_pos_last = np.inf
-        self.action_last = np.zeros(self.action_space.shape)
-        self.nearest_obstacle = np.inf
+        self.d_pos_last         = np.inf
+        self.action_last        = np.zeros(self.action_space.shape)
+        self.nearest_obstacle   = np.inf
 
         # render
         self.mujoco_renderer = None
@@ -242,7 +240,7 @@ class Manipulation(gym.Env):
         self.nearest_obstacle = min(self._compute_link_obstacle_distances())
 
         state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
-
+    
         return state
     
     # nearest obstacle distance
@@ -257,9 +255,9 @@ class Manipulation(gym.Env):
         """
         action = np.clip(action, self.action_low, self.action_high)
 
-        theta_s = action[0:3]
-        theta_r = action[3:9]
-        theta_g = action[9:10]
+        theta_s = np.array([5000.0]*3)
+        theta_r = np.array([1.0]*6)
+        theta_g = np.array([1.0])
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
         q               = self.data.sensordata[self._q_slice]
@@ -273,9 +271,9 @@ class Manipulation(gym.Env):
                         ).copy()
         else:
             T_obs = 0
-        qdot_cmd, info  = self.nmpc.solve(q, p_des, T_obs)
+        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs)
 
-        self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
+        self.data.ctrl[:] = np.clip(q_next, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()

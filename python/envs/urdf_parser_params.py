@@ -19,8 +19,8 @@ COLLISION_OVERRIDES = {
         "pos": [0, 0.023, 0.044], "rpy": [0, 0, 0],
     },
     "4_Joint": {
-        "type": "capsule", "radius": 0.025, "half_length": 0.035,
-        "pos": [0, -0.023, 0.008], "rpy": [0, 0, 0],
+        "type": "capsule", "radius": 0.025, "half_length": 0.015,
+        "pos": [0, -0.03, 0.008], "rpy": [0, 0, 0],
     },
     "5_Joint": {
         "type": "sphere", "radius": 0.030, "half_length": 0.03,

@@ -21,7 +21,6 @@ class NMPCController:
         self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics(desc)
         # print(self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin)
 
-    #TODO - Generalize the joint limits instead of hardcoding 
         self.q_min = desc.q_min
         self.q_max = desc.q_max
 
@@ -69,12 +68,12 @@ class NMPCController:
         Transcribes the paper's cost function into a parametric nonlinear program
 
         Parameters passed at solve-time
-        p = [q_init(6),        — current joint angles
-                 p_des(3),         — desired EE position
-                 T_obs(3),         — obstacle centre
-                 theta_s(3),       — DRL-tuned S^theta diagonal
-                 theta_r(6),       — DRL-tuned R^theta diagonal
-                 theta_g(1)]       — DRL-tuned collision margin
+        p = [q_init(6),             — current joint angles
+                 p_des(3),          — desired EE position
+                 T_obs(3),          — obstacle centre
+                 theta_s(3),        — DRL-tuned S^theta diagonal
+                 theta_r(6),        — DRL-tuned R^theta diagonal
+                 theta_g(1)]        — DRL-tuned collision margin
         """
         N   = self.N
         nq  = self.nq
@@ -85,8 +84,8 @@ class NMPCController:
         p_param = ca.SX.sym('p', nq + np_ + 3 + np_ + nq + 1)
         #                        q0   p_des  T_obs  θ_s   θ_r  θ_g
 
-        q_init   = p_param[                : nq              ]
         p_des    = p_param[nq              : nq+np_          ]
+        q_init   = p_param[                : nq              ]
         T_obs    = p_param[nq+np_          : nq+np_+3        ]
         theta_s  = p_param[nq+np_+3        : nq+np_+3+np_    ]
         theta_r  = p_param[nq+np_+3+np_    : nq+np_+3+np_+nq ]
@@ -255,10 +254,12 @@ class NMPCController:
             p   = p_val 
         )
 
+        self.stride = self.nq + 1 + self.nq
         w_opt = np.array(sol['x']).flatten()
 
         #Extract qdot_0
         qdot_opt = w_opt[self.nq + 1: self.nq + 1 + self.nq]
+        q_next   = w_opt[self.stride: self.stride + self.nq]
 
         self._w0 = w_opt
 
@@ -268,4 +269,4 @@ class NMPCController:
             'p_e'    : np.array(self.fk_fn(q_current)).flatten(),
         }
 
-        return qdot_opt, info
+        return qdot_opt, q_next, info
