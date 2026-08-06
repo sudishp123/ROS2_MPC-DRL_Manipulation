@@ -9,7 +9,7 @@ class NMPCController:
     N: prediction horizon of 5
     dt: timestep
     ds: safety distance threshold (m)"""
-    def __init__(self, N = 5, dt = 0.01, ds = 0.2):
+    def __init__(self, N = 50, dt = 0.01, ds = 0.2):
         self.N =  N
         self.dt = dt
         self.ds = ds
@@ -48,6 +48,7 @@ class NMPCController:
 
     #---------------- Collision Distance Calculator Helper Function (NEEDS TO BE CHANGED)----------------
     def _collision_distance(self, q_k, T_obs):
+        #TODO: Need to adjust this to calculate collision distance between others links and obstacles as well
         """
         Minimum distance between end-effector (approximated as a point) and a spherical obstacle
 

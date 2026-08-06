@@ -4,8 +4,8 @@ from envs.manipulation import Manipulation
 
 env = Manipulation(
     render_mode="human",
-    n_obstacles=4,
-    max_episode_steps=1000,
+    n_obstacles=2,
+    max_episode_steps=2000,
 )
 
 obs, info = env.reset()
@@ -15,7 +15,7 @@ print("obs shape:", obs.shape, "action space", env.action_space)
 
 action = env.action_space.sample()
 
-for i in range(1000):       
+for i in range(10000):       
     obs, rew, term, trunc, info = env.step(action)
     time.sleep(0.002)                            # slow down so the window is watchable
 

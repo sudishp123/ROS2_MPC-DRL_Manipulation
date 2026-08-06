@@ -149,9 +149,8 @@ class MakeEnv:
         self.skybox_height  = params["skybox_settings"]["height"]
 
         # target settings:
-        self.target_radius = params["target_settings"]["radius"]
-        self.target_height = params["target_settings"]["height"]
-        
+        self.target_size    = params["target_settings"]["half_extents"]
+                
         # visual settings:
         self.znear       = params["visual_settings"]["znear"]
         self.zfar        = params["visual_settings"]["zfar"]
@@ -463,8 +462,8 @@ class MakeEnv:
                                                    pos= target_pos)
         
         self.target.add_geom(name="target_geom",
-                             type=mj.mjtGeom.mjGEOM_SPHERE,
-                             size= self.target_radius,
+                             type=mj.mjtGeom.mjGEOM_BOX,
+                             size= self.target_size,
                              contype=0,
                              conaffinity=0,
                              rgba=[0.0,1.0,0.0,0.6]
@@ -500,7 +499,7 @@ class MakeEnv:
         self.add_sensors()
 
         # add target:
-        self.add_target(target_pos = [target_pos[0], target_pos[1], self.target_height])
+        self.add_target(target_pos = [target_pos[0], target_pos[1], target_pos[2]])
 
         # add obstalces:
         n_obstacles = len(obs_pos)
@@ -526,9 +525,6 @@ class MakeEnv:
 
         """
         self.data = mj.MjData(self.model)
-        self.data.ctrl[5:6] = 3.05
-
-        print(self.data.ctrl[:])
 
         # launch a passive window using the model and the data contained within:
         with mujoco.viewer.launch_passive(self.model, self.data) as self.viewer:

@@ -574,8 +574,11 @@
         "height": 256
     },
     "target_settings": {
-        "radius": 0.01,
-        "height": 0.00999
+         "half_extents": [
+                        0.01,
+                        0.01,
+                        0.01
+                    ]
     },
     "visual_settings": {
         "znear": 0.01,

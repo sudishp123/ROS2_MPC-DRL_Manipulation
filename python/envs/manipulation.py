@@ -155,7 +155,7 @@ class Manipulation(gym.Env):
                 width = self.width, height=self.height
             )
 
-        self.nmpc = NMPCController(N=5, dt=0.001*frame_skip, ds=self.d_safe)
+        self.nmpc = NMPCController(N=20, dt=0.01*frame_skip, ds=self.d_safe)
 
     def set_state(self, qpos, qvel):
         self.data.qpos[:] = qpos
@@ -256,7 +256,7 @@ class Manipulation(gym.Env):
         action = np.clip(action, self.action_low, self.action_high)
 
         theta_s = np.array([5000.0]*3)
-        theta_r = np.array([1.0]*6)
+        theta_r = np.array([0.5]*6)
         theta_g = np.array([1.0])
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
