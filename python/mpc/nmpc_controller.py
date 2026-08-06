@@ -17,7 +17,7 @@ class NMPCController:
         self.np = 3 # Cartersian Position (x,y,z)
 
     #----------------Load Kinematics----------------
-        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
+        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "jiazhua_Link")
         self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics(desc)
         # print(self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin)
 

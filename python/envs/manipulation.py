@@ -103,6 +103,9 @@ class Manipulation(gym.Env):
         self.target_bound_low   = np.array([0.1, -0.25, 0.1])
         self.target_bound_high  = np.array([0.35, 0.25, 0.35])
 
+        self.target_quat_bound_low = np.array([0.0, 0.0, 0.0, 0.0])
+        self.target_quat_bound_high = np.array([1.0, 1.0, 1.0, 1.0])
+
         # build MuJoco scene
         initial_target          = np.array([0.25, 0.0, 0.25])
         initial_obs_positions   = self._sample_obstacle_positions(target_pos=initial_target, n=self.n_obstacles)
@@ -256,7 +259,7 @@ class Manipulation(gym.Env):
         action = np.clip(action, self.action_low, self.action_high)
 
         theta_s = np.array([5000.0]*3)
-        theta_r = np.array([0.5]*6)
+        theta_r = np.array([1.0]*6)
         theta_g = np.array([1.0])
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
@@ -342,8 +345,14 @@ class Manipulation(gym.Env):
             new_target = self.np_random.uniform(
                 low = self.target_bound_low, high= self.target_bound_high
             )
+
+            new_target_quat = self.np_random.uniform(
+                            low = self.target_quat_bound_low, high= self.target_quat_bound_high
+                        )
+
             target_id = self.model.body("target").mocapid[0]
             self.data.mocap_pos[target_id] = new_target
+            self.data.mocap_quat[target_id] = new_target_quat
 
             # randomize obstacle positions
             new_obs_pos = self._sample_obstacle_positions(new_target, self.n_obstacles)

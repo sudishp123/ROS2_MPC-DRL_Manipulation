@@ -4,14 +4,14 @@ from envs.manipulation import Manipulation
 
 env = Manipulation(
     render_mode="human",
-    n_obstacles=2,
+    n_obstacles=1,
     max_episode_steps=2000,
 )
 
 obs, info = env.reset()
 print("obs shape:", obs.shape, "action space", env.action_space)
 
-# glfw.init()
+glfw.init()
 
 action = env.action_space.sample()
 

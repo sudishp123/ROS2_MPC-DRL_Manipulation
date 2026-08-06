@@ -10,8 +10,8 @@ def skew(v):
     )
 
 def axis_angle_rot(axis, angle):
-    K = skew(axis)
-    return ca.DM.eye(3) + ca.sin(angle) * K + (1-ca.cos(angle)) * (K@K)
+    K = skew(axis)                  #v_rot = v + sin(angle)k x v + (1- cos(angle))k x (k x v); K = k x v
+    return ca.DM.eye(3) + ca.sin(angle) * K + (1-ca.cos(angle)) * (K@K) #v_rot = Rv ===> R = I + sin(angle)*K + (1-cos(angle))*(K^2)
 
 def make_T(R, p):
     """4x4 homogeneous transform from 3x3 R and 3x1 p."""
@@ -52,7 +52,7 @@ def build_kinematics(desc: RobotDescription):
     p_e = T_0e[:3,3]
 
     cols = []
-    for i in range(6):
+    for i in range(n):
         T_at_joint = T_cum[i] @ make_T(ca.DM(desc.R_fixed[i]), ca.DM(desc.p_fixed[i]))
         axis_world = T_at_joint[:3, :3] @ ca.DM(desc.joint_axes[i])   # joint axis direction
         p_i = T_at_joint[:3, 3]   # joint origin position
