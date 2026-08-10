@@ -171,8 +171,8 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(10, dtype=np.float32)
-        self.action_high = np.ones(10, dtype=np.float32)
+        self.action_low = np.zeros(13, dtype=np.float32)
+        self.action_high = np.ones(13, dtype=np.float32)
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high*100, dtype=np.float32
         )
@@ -273,7 +273,7 @@ class Manipulation(gym.Env):
         p_des           = self.data.xpos[self.target_body_id]
         quat_des        = self.data.xquat[self.target_body_id]
         R_des = self.quat_to_rot(quat_des)
-        print(R_des)
+
         ee_pos          = self.data.sensordata[self._ee_pos_slice]
 
         if self.n_obstacles != 0:

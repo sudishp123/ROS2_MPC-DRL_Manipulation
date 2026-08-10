@@ -271,13 +271,13 @@ class NMPCController:
         """Run one NMPC step."""
         #Pack parameter vector
         p_val = np.concatenate([
-            q_current,
-            p_des,
+            np.asarray(q_current).flatten(),
+            np.asarray(p_des).flatten(),
             np.asarray(R_des).flatten(order='F'),
-            T_obs,
-            self.theta_s,
-            self.theta_r,
-            self.theta_g,
+            np.asarray(T_obs).flatten(),
+            np.asarray(self.theta_s).flatten(),
+            np.asarray(self.theta_r).flatten(),
+            np.asarray(self.theta_g).flatten(),
         ])
 
         sol = self.solver(
