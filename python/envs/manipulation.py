@@ -21,20 +21,20 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(_ENVS_DIR))
 class Manipulation(gym.Env):
     """
     class constructor to do the following:
-        -  initialize the environment (Mujoco model and data)
-        -  instantiate the NMPC controller
-        -  iitializes all the parameters  from json file
+    -  initialize the environment (Mujoco model and data)
+    -  instantiate the NMPC controller
+    -  initializes all the parameters  from json file
     
     Architecture:
-    DRL Policy -> NMPC cost weights (action)
-    NMPC -> joint velocity commands (qdot)
-    MuJoCo -> forward simulation
+    -  DRL Policy -> NMPC cost weights (action)
+    -  NMPC -> joint velocity commands (qdot)
+    -  MuJoCo -> forward simulation
 
     Observation:
-    [0:3] -> Cartesian EE position error (target - ee)
-    [3:9] -> Joint Positions (q)
-    [9:15] -> Joint Velocities (qdot)
-    [15] -> Distance to nearest obstacle
+    -  [0:3]   -> Cartesian EE position error (target - ee)
+    -  [3:9]   -> Joint Positions (q)
+    -  [9:15]  -> Joint Velocities (qdot)
+    -  [15]    -> Distance to nearest obstacle
     """
     metadata = {"render_modes": ["human","rgb_array"], "render_fps":500}
 
@@ -171,10 +171,15 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(13, dtype=np.float32)
-        self.action_high = np.ones(13, dtype=np.float32)
+        theta_s_max = 10000.0
+
+        self.action_low = np.zeros(10, dtype=np.float32)
+        self.action_high = np.ones(10, dtype=np.float32)
+
+        self.action_high[0:6] = theta_s_max
+
         self.action_space = gym.spaces.Box(
-            low=self.action_low, high=self.action_high*100, dtype=np.float32
+            low=self.action_low, high=self.action_high, dtype=np.float32
         )
 
     # initialize observation space:
@@ -264,16 +269,15 @@ class Manipulation(gym.Env):
         """
         action = np.clip(action, self.action_low, self.action_high)
 
-        theta_s = np.array([10000.0]*6)
-        theta_r = np.array([1.0]*6)
-        theta_g = np.array([1.0])
+        theta_s = action[0:3]
+        theta_r = action[3:9]
+        theta_g = action[9:10]
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
         q               = self.data.sensordata[self._q_slice]
         p_des           = self.data.xpos[self.target_body_id]
         quat_des        = self.data.xquat[self.target_body_id]
-        R_des = self.quat_to_rot(quat_des)
-
+        R_des           = self.quat_to_rot(quat_des)
         ee_pos          = self.data.sensordata[self._ee_pos_slice]
 
         if self.n_obstacles != 0:

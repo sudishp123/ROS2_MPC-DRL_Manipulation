@@ -52,11 +52,13 @@ def build_kinematics(desc: RobotDescription):
     p_e         = T_0e[:3,3]
     R_e         = T_0e[:3, :3] 
 
+    p_links = []
     cols = []
     for i in range(n):
         T_at_joint  = T_cum[i] @ make_T(ca.DM(desc.R_fixed[i]), ca.DM(desc.p_fixed[i]))
         axis_world  = T_at_joint[:3, :3] @ ca.DM(desc.joint_axes[i])   # joint axis direction
         p_i         = T_at_joint[:3, 3]   # joint origin position
+        p_links.append(p_i)
 
         if desc.joint_types[i] in ("revolute", "continuous"):
             Jv = ca.cross(axis_world, p_e-p_i)
@@ -67,12 +69,15 @@ def build_kinematics(desc: RobotDescription):
 
         cols.append(ca.vertcat(Jv, Jw))
 
+    p_links.append(p_e)
+
+    p_chain_sym = ca.horzcat(*p_links)
     J_sym   = ca.horzcat(*cols)
     J_fn    = ca.Function('J', [q],[J_sym])
     fk_fn   = ca.Function('fk',[q],[p_e])
     R_fn    = ca.Function('R', [q],[R_e])
 
-    return J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q
+    return J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q, p_chain_sym
 
 if __name__ == "__main__":
     import numpy as np

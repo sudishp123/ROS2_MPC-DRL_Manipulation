@@ -19,7 +19,7 @@ class NMPCController:
 
     #----------------Load Kinematics----------------
         desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "jiazhua_Link")
-        self.J_fn, self.fk_fn, self.R_fn, self.J_sym, self.p_e_sym, self.R_e_sym, self.q_kin = build_kinematics(desc)
+        self.J_fn, self.fk_fn, self.R_fn, self.J_sym, self.p_e_sym, self.R_e_sym, self.q_kin, _ = build_kinematics(desc)
         # print(self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin)
 
         self.q_min = desc.q_min
@@ -107,7 +107,7 @@ class NMPCController:
 
         #----------------Symbolic Parameters----------------
         # Everything the DRL or environment provides at runtime
-        p_param = ca.SX.sym('p', nq + np_  +  9    +   3  + n_pose + nq  + 1)
+        p_param = ca.SX.sym('p', nq + np_  +  9    +   3  + 3 + nq  + 1)
         #                        q0 + p_des + R_des  + T_obs + θ_s    + θ_r +  θ_g
 
         idx = 0
@@ -115,7 +115,7 @@ class NMPCController:
         p_des   = p_param[idx: idx+np_]; idx += np_
         R_des   = ca.reshape(p_param[idx: idx+9], 3, 3); idx += 9
         T_obs   = p_param[idx: idx+3]; idx += 3
-        theta_s = p_param[idx: idx+ n_pose]; idx += n_pose
+        theta_s = p_param[idx: idx+ 3]; idx += 3
         theta_r = p_param[idx: idx + nq]; idx += nq
         theta_g = p_param[idx: ]
 
@@ -216,9 +216,9 @@ class NMPCController:
             # Cartesian Error x_k = p_des - p_k
             p_e_k = ca.substitute(self.p_e_sym, self.q_kin,Q[k])
             R_e_k = ca.substitute(self.R_e_sym, self.q_kin, Q[k])
-            pos_err_k = p_des - p_e_N
-            ori_err_k  = self.orientation_error(R_e_k, R_des)
-            x_k = ca.vertcat(pos_err_k, ori_err_N)
+            x_k = p_des - p_e_k
+            # ori_err_k  = self.orientation_error(R_e_k, R_des)
+            # x_k = ca.vertcat(pos_err_k, ori_err_N)
 
             #S^theta_l = diag(theta_s) - DRL tunes the diagonal
             S_k = ca.diag(theta_s)
@@ -263,8 +263,8 @@ class NMPCController:
     def set_drl_params(self, theta_s, theta_r, theta_g):
         """Called by the DRL policy to update NMPC weights"""
         self.theta_s = np.clip(theta_s, 0.01, 10000.0)
-        self.theta_r = np.clip(theta_r, 0.01, 100.0)
-        self.theta_g = np.clip(theta_g, 0.0, 10.0)
+        self.theta_r = np.clip(theta_r, 0.01, 1.0)
+        self.theta_g = np.clip(theta_g, 0.0, 1.0)
 
      #----------------NMPC solve helper function----------------
     def solve(self, q_current, p_des, T_obs, R_des):
