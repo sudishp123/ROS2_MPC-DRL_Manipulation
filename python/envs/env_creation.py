@@ -407,14 +407,14 @@ class MakeEnv:
         s.name = "ee_pos"
         s.type = mj.mjtSensor.mjSENS_FRAMEPOS
         s.objtype = mj.mjtObj.mjOBJ_BODY
-        s.objname = self._joint_data[-1]['link_name']
+        s.objname = self._fixed_links[-2]['link_name'] #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
 
         # end-effector orientation (quarternion)
         s = self.spec.add_sensor()
         s.name = "ee_quat"
         s.type = mj.mjtSensor.mjSENS_FRAMEQUAT
         s.objtype = mj.mjtObj.mjOBJ_BODY
-        s.objname = self._joint_data[-1]['link_name']  
+        s.objname = self._fixed_links[-2]['link_name']  #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
 
     def add_obstacle(self, obs_pos:list):
         """

@@ -37,25 +37,26 @@ def build_kinematics(desc: RobotDescription):
 
     T_links = []
     for i in range(n):
-        R_f = ca.DM(desc.R_fixed[i])
-        p_f = ca.DM(desc.p_fixed[i])
-        axis_i = ca.DM(desc.joint_axes[i])
-        T_i = make_T(R_f, p_f) @ joint_transform(desc.joint_types[i], axis_i, q[i])
+        R_f     = ca.DM(desc.R_fixed[i])
+        p_f     = ca.DM(desc.p_fixed[i])
+        axis_i  = ca.DM(desc.joint_axes[i])
+        T_i     = make_T(R_f, p_f) @ joint_transform(desc.joint_types[i], axis_i, q[i])
         T_links.append(T_i)
 
     T_cum = [ca.DM.eye(4)]
     for i in range(n):
         T_cum.append(T_cum[-1] @ T_links[i])
 
-    T_ee_fixed = make_T(ca.DM(desc.R_ee), ca.DM(desc.p_ee))
-    T_0e = T_cum[n] @ T_ee_fixed
-    p_e = T_0e[:3,3]
+    T_ee_fixed  = make_T(ca.DM(desc.R_ee), ca.DM(desc.p_ee))
+    T_0e        = T_cum[n] @ T_ee_fixed
+    p_e         = T_0e[:3,3]
+    R_e         = T_0e[:3, :3] 
 
     cols = []
     for i in range(n):
-        T_at_joint = T_cum[i] @ make_T(ca.DM(desc.R_fixed[i]), ca.DM(desc.p_fixed[i]))
-        axis_world = T_at_joint[:3, :3] @ ca.DM(desc.joint_axes[i])   # joint axis direction
-        p_i = T_at_joint[:3, 3]   # joint origin position
+        T_at_joint  = T_cum[i] @ make_T(ca.DM(desc.R_fixed[i]), ca.DM(desc.p_fixed[i]))
+        axis_world  = T_at_joint[:3, :3] @ ca.DM(desc.joint_axes[i])   # joint axis direction
+        p_i         = T_at_joint[:3, 3]   # joint origin position
 
         if desc.joint_types[i] in ("revolute", "continuous"):
             Jv = ca.cross(axis_world, p_e-p_i)
@@ -66,11 +67,12 @@ def build_kinematics(desc: RobotDescription):
 
         cols.append(ca.vertcat(Jv, Jw))
 
-    J_sym = ca.horzcat(*cols)
-    J_fn  = ca.Function('J', [q], [J_sym])
-    fk_fn = ca.Function('fk',[q],[p_e])
+    J_sym   = ca.horzcat(*cols)
+    J_fn    = ca.Function('J', [q],[J_sym])
+    fk_fn   = ca.Function('fk',[q],[p_e])
+    R_fn    = ca.Function('R', [q],[R_e])
 
-    return J_fn, fk_fn, J_sym, p_e, q
+    return J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q
 
 if __name__ == "__main__":
     import numpy as np
@@ -83,7 +85,7 @@ if __name__ == "__main__":
     from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
     desc = parse_robot_description(sys.argv[1], sys.argv[2], sys.argv[3])
-    J_fn, fk_fn, J_sym, p_e, q = build_kinematics(desc)
+    J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q = build_kinematics(desc)
 
     rng = np.random.default_rng(0)
     q_test = rng.uniform(desc.q_min, desc.q_max)

@@ -247,7 +247,13 @@ class Manipulation(gym.Env):
         return state
     
     # nearest obstacle distance
-
+    def quat_to_rot(self, quat_des):
+        w, x, y, z = quat_des[0], quat_des[1], quat_des[2], quat_des[3]
+        R_des = np.array([[1-2*(y**2 + z**2), 2*(x*y - w*z), 2*(x*z + w*y)],
+                          [2*(x*y + w*z), 1-2*(x**2 + z**2), 2*(y*z - w*x)],
+                          [2*(x*z - w*y), 2*(y*z + w*x), 1-2*(x**2+y**2) ]
+        ])
+        return R_des
     
     # step function
     def step(self, action: np.ndarray):
@@ -258,13 +264,16 @@ class Manipulation(gym.Env):
         """
         action = np.clip(action, self.action_low, self.action_high)
 
-        theta_s = np.array([5000.0]*3)
+        theta_s = np.array([10000.0]*6)
         theta_r = np.array([1.0]*6)
         theta_g = np.array([1.0])
         self.nmpc.set_drl_params(theta_s, theta_r, theta_g)
 
         q               = self.data.sensordata[self._q_slice]
         p_des           = self.data.xpos[self.target_body_id]
+        quat_des        = self.data.xquat[self.target_body_id]
+        R_des = self.quat_to_rot(quat_des)
+        print(R_des)
         ee_pos          = self.data.sensordata[self._ee_pos_slice]
 
         if self.n_obstacles != 0:
@@ -274,7 +283,7 @@ class Manipulation(gym.Env):
                         ).copy()
         else:
             T_obs = 0
-        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs)
+        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, R_des, T_obs)
 
         self.data.ctrl[:] = np.clip(q_next, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
