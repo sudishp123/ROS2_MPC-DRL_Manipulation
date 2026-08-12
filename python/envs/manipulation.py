@@ -66,6 +66,20 @@ class Manipulation(gym.Env):
         with open (json_path) as f:
             params = json.load(f)
 
+
+        self.LINK_SEGMENTS = [
+            ("1_Link", "2_Link", 0.070),
+            ("2_Link", "3_Link", 0.060),
+            ("3_Link", "4_Link", 0.056),
+            ("4_Link", "5_Link", 0.050),
+            ("5_Link", "6_Link", 0.040),
+            ("6_Link", "jiazhua_Link", 0.040),
+        ]
+
+        self.target_exclude_last_n = 1
+        self.target_size = params["target_settings"]["half_extents"][0]
+        self.quat_thershold = params["reward_settings"].get("quat_threshold", 0.15)
+            
         self.frame_skip         = frame_skip
         self.render_mode        = render_mode
         self.width              = width
@@ -73,6 +87,8 @@ class Manipulation(gym.Env):
         self.is_eval            = is_eval
         self.n_obstacles        = n_obstacles
         self.max_episode_steps  = max_episode_steps
+
+
 
         self._qdot_norm_prev = 0.0
         self.step_count = 0
@@ -89,6 +105,7 @@ class Manipulation(gym.Env):
 
         # thresholds
         self.pos_threshold    = params["reward_settings"]["pos_threshold"]
+        self.quat_threshold    = params["reward_settings"]["quat_threshold"]
         self.collision_thresh = params["obstacle_settings"]["allowance"]
         self.d_safe           = params["reward_settings"]["safe_distance"]
         
@@ -173,10 +190,10 @@ class Manipulation(gym.Env):
         """
         theta_s_max = 10000.0
 
-        self.action_low = np.zeros(10, dtype=np.float32)
-        self.action_high = np.ones(10, dtype=np.float32)
+        self.action_low = np.zeros(15, dtype=np.float32)
+        self.action_high = np.ones(15, dtype=np.float32)
 
-        self.action_high[0:6] = theta_s_max
+        self.action_high[0:3] = theta_s_max
 
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
@@ -237,17 +254,33 @@ class Manipulation(gym.Env):
 
         ## EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
+
+        ## EE pose quat from sensors
+        ee_quat = sd[self._ee_quat_slice]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
 
+        # target quat
+        tgt_quat = self.data.xquat[self.target_body_id]
+
         # Cartesian Position Error
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
+
+        #Quat Position Error
+        R_des = self.quat_to_rot(tgt_quat)
+        R_actual = self.quat_to_rot(ee_quat)
+        n_a, s_a, a_a = R_actual[:, 0], R_actual[:, 1], R_actual[:,2]
+        n_d, s_d, a_d = R_des[:,0], R_des[:,1], R_des[:,2]
+        quat_error = (0.5 * (np.cross(n_a,n_d) + np.cross(s_a, s_d) + np.cross(a_a, a_d))).astype(np.float32)
 
         # nearest obstacle distance
         self.nearest_obstacle = min(self._compute_link_obstacle_distances())
 
-        state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
+        self.nearest_target_collision = min(self._compute_link_target_distances())
+        print(self.nearest_target_collision)
+
+        state = np.concatenate([pos_error, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
     
         return state
     
@@ -287,17 +320,24 @@ class Manipulation(gym.Env):
                         ).copy()
         else:
             T_obs = 0
-        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, R_des, T_obs)
+        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)
 
         self.data.ctrl[:] = np.clip(q_next, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()
         pos_err = nobs[0:3]
+        quat_err = nobs[3:6]
+        # print(pos_err)
         d_pos = float(np.linalg.norm(pos_err))
 
-        goal_cond = (d_pos < self.pos_threshold)
-        collision_cond = self.nearest_obstacle < self.collision_thresh 
+        d_quat = float(np.linalg.norm(quat_err))
+        print(d_pos, d_quat)
+
+        goal_cond = (d_pos < self.pos_threshold) and (d_quat < self.quat_threshold)
+        target_collision_cond = self.nearest_target_collision < self.collision_thresh
+        obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh 
+        collision_cond = target_collision_cond or obstacle_collision_cond
         term = goal_cond or collision_cond
 
         self.step_count += 1
@@ -315,7 +355,8 @@ class Manipulation(gym.Env):
         info = {}
         if term:
             info["is_success"] = bool(goal_cond)
-            info["collision"]  = bool(collision_cond)
+            info["target_collision"]  = bool(target_collision_cond)
+            info["obstacle_collision"] = bool(obstacle_collision_cond)
 
         self.d_pos_last = d_pos
         self.action_last = action
@@ -465,6 +506,20 @@ class Manipulation(gym.Env):
         R = C1*r1 + C2*r2 + C3*r3 + C4*r4 + C5*r5
         return R
 
+    def _min_link_clearance(self, targets_with_radii, exclude_last_n=0):
+        segments = self.LINK_SEGMENTS[:len(self.LINK_SEGMENTS) - exclude_last_n]
+        g_hat = np.full(len(segments), np.inf)
+        for idx, (b_start, b_end, diameter) in enumerate(segments):
+            T1 = self.data.xpos[self.model.body(b_start).id].copy()
+            T2 = self.data.xpos[self.model.body(b_end).id].copy()
+            min_dist = np.inf
+            for T, r in targets_with_radii:
+                d = self._segment_sphere_distance(T1, T2, T, diameter, r)
+                min_dist = min(min_dist, d)
+            g_hat[idx] = min_dist
+        return g_hat
+
+
     def _compute_link_obstacle_distances(self) -> np.ndarray:
         """
         Computes minimum distance between each robot link and each obstacle,
@@ -474,39 +529,14 @@ class Manipulation(gym.Env):
         Obstacle geometry: sphere with center T and radius r
         """
 
-        LINK_SEGMENTS = [
-            ("1_Link", "2_Link", 0.070),
-            ("2_Link", "3_Link", 0.060),
-            ("3_Link", "4_Link", 0.056),
-            ("4_Link", "5_Link", 0.050),
-            ("5_Link", "6_Link", 0.040),
-            ("6_Link", "jiazhua_Link", 0.040),
-        ]
+        obstacles = [(self.data.xpos[self.model.body(f"obstacle_{i}").id].copy(), self.obstacle_radius)  for i in range(1, self.n_obstacles + 1) ]
 
-        g_hat = np.full(len(LINK_SEGMENTS), np.inf)
+        return self._min_link_clearance(obstacles, exclude_last_n=0)
 
-        for link_idx, (body_start, body_end, diameter) in enumerate(LINK_SEGMENTS):
-            try:
-                T1 = self.data.xpos[self.model.body(body_start).id].copy()
-                T2 = self.data.xpos[self.model.body(body_end).id].copy()
-                D = diameter
-                r = self.obstacle_radius
-
-                min_dist_over_obstacles = np.inf
-
-                for obs_idx in range(1, self.n_obstacles + 1):
-                    T = self.data.xpos[
-                        self.model.body(f"obstacle_{obs_idx}").id
-                    ].copy()
-
-                    dist = self._segment_sphere_distance(T1, T2, T, D, r)
-                    if dist < min_dist_over_obstacles:
-                        min_dist_over_obstacles = dist
-                    g_hat[link_idx] = min_dist_over_obstacles
-
-            except:
-                g_hat[link_idx] = np.inf # body not found - skip
-        return g_hat
+    def _compute_link_target_distances(self):
+        target_pos = self.data.xpos[self.target_body_id].copy()
+        return self._min_link_clearance([(target_pos, self.target_size)],
+                                        exclude_last_n=self.target_exclude_last_n)
     
     # Calculating distance between link j and the obstacle denoted
     def _segment_sphere_distance(self,

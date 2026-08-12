@@ -77,7 +77,8 @@
     },
     "reward_settings": {
         "pos_threshold": 0.02,
-        "safe_distance": 0.15
+        "safe_distance": 0.15,
+        "quat_threshold": 0.15
     },
     "robot_footprint_settings": {
         "name": "robot_footprint",
@@ -311,7 +312,7 @@
                     "pos": [
                         0,
                         -0.03,
-                        0.008
+                        0.015
                     ],
                     "rpy": [
                         0,
@@ -361,18 +362,18 @@
                 "lower": -3.05,
                 "upper": 3.05,
                 "collision": {
-                    "type": "sphere",
-                    "radius": 0.03,
-                    "half_length": 0.03,
+                    "type": "capsule",
+                    "radius": 0.025,
+                    "half_length": 0.015,
                     "pos": [
                         0.001,
-                        0,
-                        0.029
+                        0.00,
+                        0.04
                     ],
                     "rpy": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        1.5,
+                        0.0
                     ]
                 },
                 "inertial": {

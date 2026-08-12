@@ -90,7 +90,7 @@ if __name__ == "__main__":
     from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
     desc = parse_robot_description(sys.argv[1], sys.argv[2], sys.argv[3])
-    J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q = build_kinematics(desc)
+    J_fn, fk_fn, R_fn, J_sym, p_e, R_e, q, p_chain_sym = build_kinematics(desc)
 
     rng = np.random.default_rng(0)
     q_test = rng.uniform(desc.q_min, desc.q_max)

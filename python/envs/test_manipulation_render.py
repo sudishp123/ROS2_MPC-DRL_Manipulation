@@ -13,14 +13,16 @@ print("obs shape:", obs.shape, "action space", env.action_space)
 
 glfw.init()
 
-action = env.action_space.sample()       
+action = env.action_space.sample()
+print(action)       
 for i in range(10000):
     obs, rew, term, trunc, info = env.step(action)
     time.sleep(0.002)                            # slow down so the window is watchable
 
     if term or trunc:
         print(f"episode ended at step {i}, success={info.get('is_success')}, "
-              f"collision={info.get('collision')}")
+              f"target_collision={info.get('target_collision')}, "
+              f"obstacle_collision={info.get('obstacle_collision')}")
         obs, info = env.reset()
 
 env.close()

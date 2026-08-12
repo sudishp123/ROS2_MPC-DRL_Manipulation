@@ -23,8 +23,8 @@ COLLISION_OVERRIDES = {
         "pos": [0, -0.03, 0.008], "rpy": [0, 0, 0],
     },
     "5_Joint": {
-        "type": "sphere", "radius": 0.030, "half_length": 0.03,
-        "pos": [0.001, 0, 0.029], "rpy": [0, 0, 0],
+        "type": "capsule", "radius": 0.025, "half_length": 0.015,
+        "pos": [0.001, 0, 0.04], "rpy": [0, 1.5, 0],
     },
     "6_Joint":{
             "type": "sphere","radius": 0.020,
@@ -165,10 +165,3 @@ if __name__=="__main__":
     settings  = parse_robot_settings(urdf_path, "base_link")
 
     update_environment_params(json_path, settings)
-
-
-
-
-
-    
-

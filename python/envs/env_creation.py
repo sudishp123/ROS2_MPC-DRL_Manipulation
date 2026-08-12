@@ -384,7 +384,7 @@ class MakeEnv:
             [0:6] jointpos - q for joints 1-6 (rads)
             [6:12] jointvel - qdot for joints 1-6 (rads/s)
             [12:15] framepos - EE Cartesian position (m)
-            [15:18] framequat - EE orientation quarternion (w,x,y,z)
+            [15:19] framequat - EE orientation quarternion (w,x,y,z)
         """
         # joint position sensors (one per revolute joint):
         for jd in self._joint_data:
