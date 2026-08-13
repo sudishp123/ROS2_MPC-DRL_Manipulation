@@ -579,7 +579,8 @@
                         0.01,
                         0.01,
                         0.01
-                    ]
+                    ],
+            "allowance": 0.1
     },
     "visual_settings": {
         "znear": 0.01,

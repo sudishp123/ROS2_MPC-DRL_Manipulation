@@ -278,7 +278,6 @@ class Manipulation(gym.Env):
         self.nearest_obstacle = min(self._compute_link_obstacle_distances())
 
         self.nearest_target_collision = min(self._compute_link_target_distances())
-        print(self.nearest_target_collision)
 
         state = np.concatenate([pos_error, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
     
@@ -318,6 +317,7 @@ class Manipulation(gym.Env):
                         [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
                         key=lambda pos:np.linalg.norm(pos-ee_pos)
                         ).copy()
+            print(T_obs)
         else:
             T_obs = 0
         qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)
@@ -332,7 +332,6 @@ class Manipulation(gym.Env):
         d_pos = float(np.linalg.norm(pos_err))
 
         d_quat = float(np.linalg.norm(quat_err))
-        print(d_pos, d_quat)
 
         goal_cond = (d_pos < self.pos_threshold) and (d_quat < self.quat_threshold)
         target_collision_cond = self.nearest_target_collision < self.collision_thresh

@@ -1,4 +1,4 @@
-import json
+import json, mujoco
 from envs.env_creation import MakeEnv
 
 # load params
@@ -13,6 +13,13 @@ env.make_env(
     obs_pos = [[0.4, 0.2, 0.1],
                [-0.3, 0.3, 0.1]]
 )
+
+model = env.model
+jiazhua_id = model.body("jiazhua_Link").id
+data = mujoco.MjData(model)
+
+print("jiazhua origin (world):", data.xpos[jiazhua_id])
+print("jiazhua orientation (world):", data.xmat[jiazhua_id].reshape(3,3))
 
 # for j, name in enumerate(env.joint_names):
 #     body_id = env.model.joint(name).bodyid[0]
