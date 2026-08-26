@@ -4,7 +4,7 @@ from envs.manipulation import Manipulation
 
 env = Manipulation(
     render_mode="human",
-    n_obstacles=2,
+    n_obstacles=1,
     max_episode_steps=2000,
 )
 
@@ -14,7 +14,7 @@ print("obs shape:", obs.shape, "action space", env.action_space)
 glfw.init()
 
 action = env.action_space.sample()
-      
+print(action)       
 for i in range(10000):
     obs, rew, term, trunc, info = env.step(action)
     time.sleep(0.002)                            # slow down so the window is watchable

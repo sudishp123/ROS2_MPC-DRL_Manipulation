@@ -4,6 +4,8 @@ python/envs/__init__.py
 python/envs/env_creation.py
 python/envs/manipulation.py
 python/envs/render.py
+python/envs/test_manipulation_render.py
+python/envs/urdf_parser_params.py
 python/jetcobot_drl.egg-info/PKG-INFO
 python/jetcobot_drl.egg-info/SOURCES.txt
 python/jetcobot_drl.egg-info/dependency_links.txt
@@ -18,6 +20,3 @@ python/mpc/jacobian/jetcobot_jacobian_casadi.py
 python/mpc/jacobian/utils/__init__.py
 python/mpc/jacobian/utils/robot_description.py
 python/mpc/jacobian/utils/urdf_parser.py
-python/training/__init__.py
-python/training/algorithms.py
-python/training/gym_SAC.py

@@ -254,9 +254,12 @@ class Manipulation(gym.Env):
 
         ## EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
+        gripper_col = self.model.geom("jiazhua_Link_collision_2").id
+        ee_pos1 = self.data.geom_xpos[gripper_col]
 
         ## EE pose quat from sensors
         ee_quat = sd[self._ee_quat_slice]
+        ee_quat1 = self.data.geom_xmat[gripper_col]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
@@ -266,6 +269,7 @@ class Manipulation(gym.Env):
 
         # Cartesian Position Error
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
+        pos_error1 = (tgt_pos - ee_pos1).astype(np.float32)
 
         #Quat Position Error
         R_des = self.quat_to_rot(tgt_quat)
@@ -279,7 +283,7 @@ class Manipulation(gym.Env):
 
         self.nearest_target_collision = min(self._compute_link_target_distances())
 
-        state = np.concatenate([pos_error, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
+        state = np.concatenate([pos_error1, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
     
         return state
     
@@ -317,7 +321,6 @@ class Manipulation(gym.Env):
                         [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
                         key=lambda pos:np.linalg.norm(pos-ee_pos)
                         ).copy()
-            print(T_obs)
         else:
             T_obs = 0
         qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)

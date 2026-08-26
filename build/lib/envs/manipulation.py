@@ -6,7 +6,7 @@ import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.registration import register
 from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
-
+from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
 import os, json, sys
 
@@ -21,33 +21,31 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(_ENVS_DIR))
 class Manipulation(gym.Env):
     """
     class constructor to do the following:
-        -  initialize the environment (Mujoco model and data)
-        -  instantiate the NMPC controller
-        -  iitializes all the parameters  from json file
+    -  initialize the environment (Mujoco model and data)
+    -  instantiate the NMPC controller
+    -  initializes all the parameters  from json file
     
     Architecture:
-    DRL Policy -> NMPC cost weights (action)
-    NMPC -> joint velocity commands (qdot)
-    MuJoCo -> forward simulation
+    -  DRL Policy -> NMPC cost weights (action)
+    -  NMPC -> joint velocity commands (qdot)
+    -  MuJoCo -> forward simulation
 
     Observation:
-    [0:3] -> Cartesian EE position error (target - ee)
-    [3:9] -> Joint Positions (q)
-    [9:15] -> Joint Velocities (qdot)
-    [15] -> Distance to nearest obstacle
+    -  [0:3]   -> Cartesian EE position error (target - ee)
+    -  [3:9]   -> Joint Positions (q)
+    -  [9:15]  -> Joint Velocities (qdot)
+    -  [15]    -> Distance to nearest obstacle
     """
     metadata = {"render_modes": ["human","rgb_array"], "render_fps":500}
 
     def __init__(self,
                  json_file: str="environment_params.json",
                  frame_skip: int = 5,
-                 render_mode: str = "rgb_arra",
+                 render_mode: str = "rgb_array",
                  width: int = 480,
                  height: int = 480,
                  reward_scale_options: dict[str, float] | None = None,
                  randomization_options: dict[str,float] | None = None,
-                 obstacle_options: dict[str, int] = {"n_obstacles":0},
-                 visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False,
                  n_obstacles: int = 3,
                  max_episode_steps: int = 1000,
@@ -68,13 +66,29 @@ class Manipulation(gym.Env):
         with open (json_path) as f:
             params = json.load(f)
 
-        self.frame_skip = frame_skip
-        self.render_mode = render_mode
-        self.width = width
-        self.height = height
-        self.is_eval = is_eval
-        self.n_obstacles = n_obstacles
-        self.max_episode_steps = max_episode_steps
+
+        self.LINK_SEGMENTS = [
+            ("1_Link", "2_Link", 0.070),
+            ("2_Link", "3_Link", 0.060),
+            ("3_Link", "4_Link", 0.056),
+            ("4_Link", "5_Link", 0.050),
+            ("5_Link", "6_Link", 0.040),
+            ("6_Link", "jiazhua_Link", 0.040),
+        ]
+
+        self.target_exclude_last_n = 1
+        self.target_size = params["target_settings"]["half_extents"][0]
+        self.quat_thershold = params["reward_settings"].get("quat_threshold", 0.15)
+            
+        self.frame_skip         = frame_skip
+        self.render_mode        = render_mode
+        self.width              = width
+        self.height             = height
+        self.is_eval            = is_eval
+        self.n_obstacles        = n_obstacles
+        self.max_episode_steps  = max_episode_steps
+
+
 
         self._qdot_norm_prev = 0.0
         self.step_count = 0
@@ -82,17 +96,18 @@ class Manipulation(gym.Env):
         self.obstacle_radius = params["obstacle_settings"]["size_high"]
 
         # reward scales
-        rs =                       reward_scale_options or {}
-        self.rew_target_scale =    rs.get("rew_target_scale", 200.0)
-        self.rew_collision_scale = rs.get("rew_collision_scale", -100.0)
-        self.rew_dist_scale =      rs.get("rew_dist_scale", 10.0)
-        self.rew_effort_scale =    rs.get("rew_effort_scale", -0.1)
-        self.rew_time            = rs.get("rew_time", -0.5)
+        rs                          = reward_scale_options or {}
+        self.rew_target_scale       = rs.get("rew_target_scale", 200.0)
+        self.rew_collision_scale    = rs.get("rew_collision_scale", -100.0)
+        self.rew_dist_scale         = rs.get("rew_dist_scale", 10.0)
+        self.rew_effort_scale       = rs.get("rew_effort_scale", -0.1)
+        self.rew_time               = rs.get("rew_time", -0.5)
 
         # thresholds
         self.pos_threshold    = params["reward_settings"]["pos_threshold"]
+        self.quat_threshold    = params["reward_settings"]["quat_threshold"]
         self.collision_thresh = params["obstacle_settings"]["allowance"]
-        self.d_safe           = params["reward_settigs"]["safe_distace"]
+        self.d_safe           = params["reward_settings"]["safe_distance"]
         
         # episode counters
         self.episode_counter    = 0
@@ -102,36 +117,37 @@ class Manipulation(gym.Env):
 
         # workspace bounds
         # keep targets reachable: JetCobot max reach ~0.40 m
-        self.target_bound_low = np.array([0.1, -0.25, 0.1])
-        self.target_bound_high = np.array([0.35, 0.25, 0.35])
+        self.target_bound_low   = np.array([0.1, -0.25, 0.1])
+        self.target_bound_high  = np.array([0.35, 0.25, 0.35])
+
+        self.target_quat_bound_low = np.array([0.0, 0.0, 0.0, 0.0])
+        self.target_quat_bound_high = np.array([1.0, 1.0, 1.0, 1.0])
 
         # build MuJoco scene
-        initial_target = np.array([0.25, 0.0, 0.25])
-        initial_obs_positions = self._sample_obstacle_positions(
-            target_pos=initial_target, n=self.n_obstacles
-        )
+        initial_target          = np.array([0.25, 0.0, 0.25])
+        initial_obs_positions   = self._sample_obstacle_positions(target_pos=initial_target, n=self.n_obstacles)
 
         env = MakeEnv(params)
         env.make_env(
-            robot_pos = [0.0, 0.0],
-            target_pos = initial_target.tolist(),
-            obs_pos = initial_obs_positions,
+            robot_pos   = [0.0, 0.0],
+            target_pos  = initial_target.tolist(),
+            obs_pos     = initial_obs_positions,
         )
 
-        self.model = env.model
-        self.model.vis.global_.offwidth = width
-        self.model.vis.global_.offheight = height
+        self.model                          = env.model
+        self.model.vis.global_.offwidth     = width
+        self.model.vis.global_.offheight    = height
         self.data = mj.MjData(self.model)
 
         # cache body/sensor IDs
-        self.ee_body_id = self.model.body("6_Link").id
+        self.ee_body_id     = self.model.body("6_Link").id
         self.target_body_id = self.model.body("target").id
-        self.joint_ids = [self.model.joint]
+        self.joint_ids      = [self.model.joint]
 
         # sensor layout set by add_sensors():
-        self._q_slice = slice(0,6)
-        self._qdot_slice = slice(6, 12)
-        self._ee_pos_slice = slice(12, 15)
+        self._q_slice       = slice(0,6)
+        self._qdot_slice    = slice(6, 12)
+        self._ee_pos_slice  = slice(12, 15)
         self._ee_quat_slice = slice(15, 19)
 
         # spaces
@@ -147,9 +163,9 @@ class Manipulation(gym.Env):
         self.init_qvel = self.data.qvel.ravel().copy()
 
         # tracking state:
-        self.d_pos_last = np.inf
-        self.action_last = np.zeros(self.action_space.shape)
-        self.nearest_obstacle = np.inf
+        self.d_pos_last         = np.inf
+        self.action_last        = np.zeros(self.action_space.shape)
+        self.nearest_obstacle   = np.inf
 
         # render
         self.mujoco_renderer = None
@@ -159,7 +175,7 @@ class Manipulation(gym.Env):
                 width = self.width, height=self.height
             )
 
-        self.nmpc = NMPCController(N=5, dt=0.001*frame_skip, ds=self.d_safe)
+        self.nmpc = NMPCController(N=20, dt=0.01*frame_skip, ds=self.d_safe)
 
     def set_state(self, qpos, qvel):
         self.data.qpos[:] = qpos
@@ -172,8 +188,13 @@ class Manipulation(gym.Env):
         DRL action = NMPC weight vector
         NMPC maps w -> joint velocity commands at each control step
         """
-        self.action_low = np.zeros(10, dtype=np.float32)
-        self.action_high = np.ones(10, dtype=np.float32)
+        theta_s_max = 10000.0
+
+        self.action_low = np.zeros(15, dtype=np.float32)
+        self.action_high = np.ones(15, dtype=np.float32)
+
+        self.action_high[0:3] = theta_s_max
+
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
         )
@@ -205,9 +226,12 @@ class Manipulation(gym.Env):
         # pos error
         low[0:3] = -0.8 ; high[0:3] = 0.8
 
+
+        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
+
         # joint limits from params
-        j_low = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
-        j_high = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
+        j_low = desc.q_min
+        j_high = desc.q_max
         low[3:9] = j_low; high[3:9] = j_high
 
         # joint velocities
@@ -230,22 +254,43 @@ class Manipulation(gym.Env):
 
         ## EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
+
+        ## EE pose quat from sensors
+        ee_quat = sd[self._ee_quat_slice]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
 
+        # target quat
+        tgt_quat = self.data.xquat[self.target_body_id]
+
         # Cartesian Position Error
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
+
+        #Quat Position Error
+        R_des = self.quat_to_rot(tgt_quat)
+        R_actual = self.quat_to_rot(ee_quat)
+        n_a, s_a, a_a = R_actual[:, 0], R_actual[:, 1], R_actual[:,2]
+        n_d, s_d, a_d = R_des[:,0], R_des[:,1], R_des[:,2]
+        quat_error = (0.5 * (np.cross(n_a,n_d) + np.cross(s_a, s_d) + np.cross(a_a, a_d))).astype(np.float32)
 
         # nearest obstacle distance
         self.nearest_obstacle = min(self._compute_link_obstacle_distances())
 
-        state = np.concatenate([pos_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
+        self.nearest_target_collision = min(self._compute_link_target_distances())
 
+        state = np.concatenate([pos_error, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
+    
         return state
     
     # nearest obstacle distance
-
+    def quat_to_rot(self, quat_des):
+        w, x, y, z = quat_des[0], quat_des[1], quat_des[2], quat_des[3]
+        R_des = np.array([[1-2*(y**2 + z**2), 2*(x*y - w*z), 2*(x*z + w*y)],
+                          [2*(x*y + w*z), 1-2*(x**2 + z**2), 2*(y*z - w*x)],
+                          [2*(x*z - w*y), 2*(y*z + w*x), 1-2*(x**2+y**2) ]
+        ])
+        return R_des
     
     # step function
     def step(self, action: np.ndarray):
@@ -263,23 +308,35 @@ class Manipulation(gym.Env):
 
         q               = self.data.sensordata[self._q_slice]
         p_des           = self.data.xpos[self.target_body_id]
+        quat_des        = self.data.xquat[self.target_body_id]
+        R_des           = self.quat_to_rot(quat_des)
         ee_pos          = self.data.sensordata[self._ee_pos_slice]
 
-        T_obs           = min(
-            [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
-            key=lambda pos:np.linalg.norm(pos-ee_pos)
-            ).copy()
-        qdot_cmd, info  = self.nmpc.solve(q, p_des, T_obs)
+        if self.n_obstacles != 0:
+            T_obs           = min(
+                        [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
+                        key=lambda pos:np.linalg.norm(pos-ee_pos)
+                        ).copy()
+            print(T_obs)
+        else:
+            T_obs = 0
+        qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)
 
-        self.data.ctrl[:] = np.clip(qdot_cmd, -4.0, 4.0)
+        self.data.ctrl[:] = np.clip(q_next, -4.0, 4.0)
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         nobs= self._get_obs()
         pos_err = nobs[0:3]
+        quat_err = nobs[3:6]
+        # print(pos_err)
         d_pos = float(np.linalg.norm(pos_err))
 
-        goal_cond = (d_pos < self.pos_threshold)
-        collision_cond = self.nearest_obstacle < self.collision_thresh
+        d_quat = float(np.linalg.norm(quat_err))
+
+        goal_cond = (d_pos < self.pos_threshold) and (d_quat < self.quat_threshold)
+        target_collision_cond = self.nearest_target_collision < self.collision_thresh
+        obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh 
+        collision_cond = target_collision_cond or obstacle_collision_cond
         term = goal_cond or collision_cond
 
         self.step_count += 1
@@ -297,7 +354,8 @@ class Manipulation(gym.Env):
         info = {}
         if term:
             info["is_success"] = bool(goal_cond)
-            info["collision"]  = bool(collision_cond)
+            info["target_collision"]  = bool(target_collision_cond)
+            info["obstacle_collision"] = bool(obstacle_collision_cond)
 
         self.d_pos_last = d_pos
         self.action_last = action
@@ -340,8 +398,14 @@ class Manipulation(gym.Env):
             new_target = self.np_random.uniform(
                 low = self.target_bound_low, high= self.target_bound_high
             )
+
+            new_target_quat = self.np_random.uniform(
+                            low = self.target_quat_bound_low, high= self.target_quat_bound_high
+                        )
+
             target_id = self.model.body("target").mocapid[0]
             self.data.mocap_pos[target_id] = new_target
+            self.data.mocap_quat[target_id] = new_target_quat
 
             # randomize obstacle positions
             new_obs_pos = self._sample_obstacle_positions(new_target, self.n_obstacles)
@@ -364,7 +428,6 @@ class Manipulation(gym.Env):
     def close(self):
         if self.mujoco_renderer is not None:
             self.mujoco_renderer.close()
-        self._renderer.close()   
 
     # helper functions:
     def _sample_obstacle_positions(
@@ -442,6 +505,20 @@ class Manipulation(gym.Env):
         R = C1*r1 + C2*r2 + C3*r3 + C4*r4 + C5*r5
         return R
 
+    def _min_link_clearance(self, targets_with_radii, exclude_last_n=0):
+        segments = self.LINK_SEGMENTS[:len(self.LINK_SEGMENTS) - exclude_last_n]
+        g_hat = np.full(len(segments), np.inf)
+        for idx, (b_start, b_end, diameter) in enumerate(segments):
+            T1 = self.data.xpos[self.model.body(b_start).id].copy()
+            T2 = self.data.xpos[self.model.body(b_end).id].copy()
+            min_dist = np.inf
+            for T, r in targets_with_radii:
+                d = self._segment_sphere_distance(T1, T2, T, diameter, r)
+                min_dist = min(min_dist, d)
+            g_hat[idx] = min_dist
+        return g_hat
+
+
     def _compute_link_obstacle_distances(self) -> np.ndarray:
         """
         Computes minimum distance between each robot link and each obstacle,
@@ -451,38 +528,14 @@ class Manipulation(gym.Env):
         Obstacle geometry: sphere with center T and radius r
         """
 
-        LINK_SEGMENTS = [
-            ("1_Link", "2_Link", 0.070),
-            ("2_Link", "3_Link", 0.060),
-            ("3_Link", "4_Link", 0.056),
-            ("4_Link", "5_Link", 0.050),
-            ("5_Link", "6_Link", 0.040),
-            ("6_Link", "jiazhua_Link", 0.040),
-        ]
+        obstacles = [(self.data.xpos[self.model.body(f"obstacle_{i}").id].copy(), self.obstacle_radius)  for i in range(1, self.n_obstacles + 1) ]
 
-        g_hat = np.full(len(LINK_SEGMENTS), np.inf)
+        return self._min_link_clearance(obstacles, exclude_last_n=0)
 
-        for link_idx, (body_start, body_end, diameter) in enumerate(LINK_SEGMENTS):
-            try:
-                T1 = self.data.xpos[self.model.body(body_start).id].copy()
-                T2 = self.data.xpos[self.model.body(body_end).id].copy()
-                D = diameter
-                r = self.obstacle_radius
-
-                min_dist_over_obstacles = np.inf
-
-                for obs_idx in range(1, self.n_obstacles + 1):
-                    T = self.data.xpos[
-                        self.model.body(f"obstacle_{obs_idx}").id
-                    ].copy()
-
-                    dist = self._segment_sphere_distance(T1, T2, T, D, r)
-                    if dist < min_dist_over_obstacles:
-                        min_dist_over_obstacles = dist
-                    g_hat[link_idx] = min_dist_over_obstacles
-            except:
-                g_hat[link_idx] = np.inf # body not found - skip
-        return g_hat
+    def _compute_link_target_distances(self):
+        target_pos = self.data.xpos[self.target_body_id].copy()
+        return self._min_link_clearance([(target_pos, self.target_size)],
+                                        exclude_last_n=self.target_exclude_last_n)
     
     # Calculating distance between link j and the obstacle denoted
     def _segment_sphere_distance(self,

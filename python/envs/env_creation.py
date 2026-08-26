@@ -238,6 +238,21 @@ class MakeEnv:
                                      size = self.ground_size,
                                      rgba = self.ground_rgba,
                                      material = "groundplane")
+
+
+    def _add_collision_geoms(self, body, link_name: str, collision_spec):
+
+        specs = collision_spec if isinstance(collision_spec, list) else [collision_spec]
+        for i, col in enumerate(specs):
+            suffix = f"_{i}" if len(specs) > 1 else ""
+            body.add_geom(name=f"{link_name}_collision{suffix}",
+                      type=_COLLISION_GEOM_TYPE[col["type"]],
+                      size=_collision_geom_size(col),
+                      pos=col["pos"],
+                      euler=col["rpy"],
+                      contype=1,
+                      conaffinity=1,
+                      rgba=col.get("rgba", [1, 0, 0, 0.3]))
         
 
     def add_robot(self, robot_pos: list):
@@ -307,15 +322,7 @@ class MakeEnv:
                           conaffinity=0,
                           rgba=self.link_rgba)
             
-            col = jd["collision"]
-            body.add_geom(name=f"{jd["link_name"]}_collision",
-                          type=_COLLISION_GEOM_TYPE[col["type"]],
-                          size=_collision_geom_size(col),
-                          pos=col["pos"],
-                          euler=col["rpy"],
-                          contype=1,
-                          conaffinity=1,
-                          rgba=[1,0,0,0.3])
+            self._add_collision_geoms(body, jd["link_name"], jd["collision"])
             
             self._body_lookup[jd["link_name"]] = body
             parent_body = body
@@ -340,15 +347,7 @@ class MakeEnv:
                         conaffinity=0,
                         rgba=self.tool_rgba)
             
-            col = fl["collision"]
-            body.add_geom(name=f"{fl["link_name"]}_collision",
-                        type=_COLLISION_GEOM_TYPE[col["type"]],
-                        size=_collision_geom_size(col),
-                        pos=col["pos"],
-                        euler=col["rpy"],
-                        contype=1,
-                        conaffinity=1,
-                        rgba=[1,0,0,0.3])
+            self._add_collision_geoms(body, fl["link_name"], fl["collision"])
             
             self._body_lookup[fl["link_name"]] = body
 

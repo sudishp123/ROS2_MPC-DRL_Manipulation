@@ -1,39 +1,42 @@
 import numpy as np
 import casadi as ca
 from hilo_mpc import NMPC, SimpleControlLoop
-from mpc.jacobian.jetcobot_jacobian_casadi import build_kinematics
+from mpc.jacobian.generic_jacobian_casadi import build_kinematics
+from mpc.jacobian.utils.urdf_parser import parse_robot_description
 
 class NMPCController:
     """NMPC Based on Baselizadeh et al. (2024)
     N: prediction horizon of 5
     dt: timestep
     ds: safety distance threshold (m)"""
-    def __init__(self, N = 5, dt = 0.01, ds = 0.2):
+    def __init__(self, N = 50, dt = 0.01, ds = 0.2):
         self.N =  N
         self.dt = dt
         self.ds = ds
         self.nq = 6 # number of joints
         self.np = 3 # Cartersian Position (x,y,z)
+        self.no = 3 # Orientation error dimension (axisangle style, 3 components)
 
     #----------------Load Kinematics----------------
-        self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin = build_kinematics()
+        desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "jiazhua_Link")
+        self.J_fn, self.fk_fn, self.R_fn, self.J_sym, self.p_e_sym, self.R_e_sym, self.q_kin, _ = build_kinematics(desc)
+        # print(self.J_fn, self.fk_fn, self.J_sym, self.p_e_sym, self.q_kin)
 
-    #----------------Joint Limits---------------- 
-        self.q_min = np.array([-3.05, -1.57, -1.57, -1.57, -3.05, -1.57])
-        self.q_max = np.array([3.05, 1.57, 1.57, 1.57, 3.05, 1.57])
+        self.q_min = desc.q_min
+        self.q_max = desc.q_max
 
         self.qdot_min = np.full(6, -4.0) #Locked Motor speed is 52 RPM = 5.445 rads/s so haing a 75% operating limit
         self.qdot_max = np.full(6, 4.0)
 
         #Terminal Cost Weight S_N - fixed, based on paper
-        self.S_N = np.diag([10.0, 10.0, 10.0])
+        self.S_N = np.diag([10.0, 10.0, 10.0, 5.0, 5.0, 5.0])
 
-        #Defauly NMPC parameter (DRL will takeover during runtime)
+        #Default NMPC parameter (DRL will takeover during runtime)
         #theta_S: diagonal weights on Cartesian error (3,) - paper uses 6 for pose error
         #theta_R: diagonal weights on joint velocities (6,)
         #theta_g: collision avoidance margin per link (N_links)
 
-        self.theta_s = np.ones(self.np) * 10.0
+        self.theta_s = np.ones(self.np + self.no) * 10.0
         self.theta_r = np.ones(self.nq) * 1.0
         self.theta_g = np.ones(1) * 0.0
 
@@ -44,8 +47,30 @@ class NMPCController:
         
         self._build_ocp()
 
+    #---------------- Orientation Error Helper Function ------------------------
+    def orientation_error(self, R_a, R_d):
+        """
+        Rotation matrix based orientation error
+
+        e_0 = 1/2 * (n_a x n_d + s_a x s_d + a_a x a_d)
+
+        Args:
+            R_a: ca.SX(3,3) - actual (current) end-effector rotation
+            R_d: ca.SX(3,3) - desired end-effector rotation
+
+        Returns:
+            e_o: ca.SX(3,3) - orientation error vector
+        """
+        n_a, s_a, a_a = R_a[:, 0], R_a[:, 1], R_a[:, 2]
+        n_d, s_d, a_d = R_d[:, 0], R_d[:, 1], R_d[:, 2]
+        e_o = 0.5 * (ca.cross(n_a,n_d) + ca.cross(s_a, s_d) + ca.cross(a_a, a_d))
+
+        return e_o
+    
+
     #---------------- Collision Distance Calculator Helper Function (NEEDS TO BE CHANGED)----------------
     def _collision_distance(self, q_k, T_obs):
+        #TODO: Need to adjust this to calculate collision distance between others links and obstacles as well
         """
         Minimum distance between end-effector (approximated as a point) and a spherical obstacle
 
@@ -66,28 +91,33 @@ class NMPCController:
         Transcribes the paper's cost function into a parametric nonlinear program
 
         Parameters passed at solve-time
-        p = [q_init(6),        — current joint angles
-                 p_des(3),         — desired EE position
-                 T_obs(3),         — obstacle centre
-                 theta_s(3),       — DRL-tuned S^theta diagonal
-                 theta_r(6),       — DRL-tuned R^theta diagonal
-                 theta_g(1)]       — DRL-tuned collision margin
+        p = [q_init(6),             — current joint angles
+                 p_des(3),          — desired EE position
+                 R_des(9),          — desired EE orientation (3x3 rotation matrix )          
+                 T_obs(3),          — obstacle centre
+                 theta_s(3),        — DRL-tuned S^theta diagonal
+                 theta_r(6),        — DRL-tuned R^theta diagonal
+                 theta_g(1)]        — DRL-tuned collision margin
         """
-        N   = self.N
-        nq  = self.nq
-        np_ = self.np
+        N       = self.N
+        nq      = self.nq
+        np_     = self.np
+        no      = self.no
+        n_pose  = np_ + no
 
         #----------------Symbolic Parameters----------------
         # Everything the DRL or environment provides at runtime
-        p_param = ca.SX.sym('p', nq + np_ + 3 + np_ + nq + 1)
-        #                        q0   p_des  T_obs  θ_s   θ_r  θ_g
+        p_param = ca.SX.sym('p', nq + np_  +  9    +   3  + 3 + nq  + 1)
+        #                        q0 + p_des + R_des  + T_obs + θ_s    + θ_r +  θ_g
 
-        q_init   = p_param[                : nq              ]
-        p_des    = p_param[nq              : nq+np_          ]
-        T_obs    = p_param[nq+np_          : nq+np_+3        ]
-        theta_s  = p_param[nq+np_+3        : nq+np_+3+np_    ]
-        theta_r  = p_param[nq+np_+3+np_    : nq+np_+3+np_+nq ]
-        theta_g  = p_param[nq+np_+3+np_+nq :                 ]
+        idx = 0
+        q_init  = p_param[idx: idx+nq]; idx += nq
+        p_des   = p_param[idx: idx+np_]; idx += np_
+        R_des   = ca.reshape(p_param[idx: idx+9], 3, 3); idx += 9
+        T_obs   = p_param[idx: idx+3]; idx += 3
+        theta_s = p_param[idx: idx+ 3]; idx += 3
+        theta_r = p_param[idx: idx + nq]; idx += nq
+        theta_g = p_param[idx: ]
 
         #----------------Decision Variables----------------
         # w = [q_0, qdot_0, zeta_0,  q_1, qdot_1, zeta_1, ..., q_N, zeta_N]
@@ -145,6 +175,10 @@ class NMPCController:
             lbg += [0.0] * nq
             ubg += [0.0] * nq
 
+        g += [Q[0] - q_init]
+        lbg += [0.0]* nq
+        ubg += [0.0] * nq
+
         #----------------Collision Avoidance Constraints----------------
         # g^j_k(q_k, T_k)  + theta^j_g <= zeta^j_k
         # Rearranged: g^j_k + theta^j_g - zeta^j_k <= 0
@@ -169,7 +203,10 @@ class NMPCController:
 
         # Terminal Cost: x_N^T S_N x_N + eta_f^T zeta_N
         p_e_N = ca.substitute(self.p_e_sym, self.q_kin, Q[N])
-        x_N = p_des - p_e_N
+        R_e_N = ca.substitute(self.R_e_sym, self.q_kin, Q[N])
+        pos_err_N = p_des - p_e_N
+        ori_err_N  = self.orientation_error(R_e_N, R_des)
+        x_N = ca.vertcat(pos_err_N, ori_err_N)
         S_N = ca.DM(self.S_N)
         cost += ca.mtimes([x_N.T, S_N, x_N])
         cost += self.eta_f[0] * Zeta[N]
@@ -178,7 +215,10 @@ class NMPCController:
         for k in range(N):
             # Cartesian Error x_k = p_des - p_k
             p_e_k = ca.substitute(self.p_e_sym, self.q_kin,Q[k])
+            R_e_k = ca.substitute(self.R_e_sym, self.q_kin, Q[k])
             x_k = p_des - p_e_k
+            # ori_err_k  = self.orientation_error(R_e_k, R_des)
+            # x_k = ca.vertcat(pos_err_k, ori_err_N)
 
             #S^theta_l = diag(theta_s) - DRL tunes the diagonal
             S_k = ca.diag(theta_s)
@@ -223,20 +263,21 @@ class NMPCController:
     def set_drl_params(self, theta_s, theta_r, theta_g):
         """Called by the DRL policy to update NMPC weights"""
         self.theta_s = np.clip(theta_s, 0.01, 10000.0)
-        self.theta_r = np.clip(theta_r, 0.01, 100.0)
-        self.theta_g = np.clip(theta_g, 0.0, 10.0)
+        self.theta_r = np.clip(theta_r, 0.01, 1.0)
+        self.theta_g = np.clip(theta_g, 0.0, 1.0)
 
      #----------------NMPC solve helper function----------------
-    def solve(self, q_current, p_des, T_obs):
+    def solve(self, q_current, p_des, T_obs, R_des):
         """Run one NMPC step."""
         #Pack parameter vector
         p_val = np.concatenate([
-            q_current,
-            p_des,
-            T_obs,
-            self.theta_s,
-            self.theta_r,
-            self.theta_g,
+            np.asarray(q_current).flatten(),
+            np.asarray(p_des).flatten(),
+            np.asarray(R_des).flatten(order='F'),
+            np.asarray(T_obs).flatten(),
+            np.asarray(self.theta_s).flatten(),
+            np.asarray(self.theta_r).flatten(),
+            np.asarray(self.theta_g).flatten(),
         ])
 
         sol = self.solver(
@@ -248,10 +289,12 @@ class NMPCController:
             p   = p_val 
         )
 
+        self.stride = self.nq + 1 + self.nq
         w_opt = np.array(sol['x']).flatten()
 
         #Extract qdot_0
         qdot_opt = w_opt[self.nq + 1: self.nq + 1 + self.nq]
+        q_next   = w_opt[self.stride: self.stride + self.nq]
 
         self._w0 = w_opt
 
@@ -261,4 +304,4 @@ class NMPCController:
             'p_e'    : np.array(self.fk_fn(q_current)).flatten(),
         }
 
-        return qdot_opt, info
+        return qdot_opt, q_next, info

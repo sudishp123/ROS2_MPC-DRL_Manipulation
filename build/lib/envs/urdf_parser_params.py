@@ -7,43 +7,35 @@ DEFAULT_VEL_LIMIT = 4.0
 
 COLLISION_OVERRIDES = {
     "1_Joint":{
-        "type": "capsule", "radius": 0.032, "half_length": 0.035,
+        "type": "cylinder", "radius": 0.038, "half_length": 0.035,
         "pos": [0, 0, 0.035], "rpy": [0,0,0]
     },
     "2_Joint": {
-        "type": "capsule", "radius": 0.032, "half_length": 0.055,
+        "type": "capsule", "radius": 0.030, "half_length": 0.055,
         "pos": [0, -0.023, 0.052], "rpy": [0, 0, 0],
     },
     "3_Joint": {
-        "type": "capsule", "radius": 0.032, "half_length": 0.048,
+        "type": "capsule", "radius": 0.028, "half_length": 0.048,
         "pos": [0, 0.023, 0.044], "rpy": [0, 0, 0],
     },
     "4_Joint": {
-        "type": "capsule", "radius": 0.032, "half_length": 0.015,
+        "type": "capsule", "radius": 0.025, "half_length": 0.015,
         "pos": [0, -0.03, 0.008], "rpy": [0, 0, 0],
     },
     "5_Joint": {
-        "type": "capsule", "radius": 0.032, "half_length": 0.015,
+        "type": "capsule", "radius": 0.025, "half_length": 0.015,
         "pos": [0.001, 0, 0.04], "rpy": [0, 1.5, 0],
     },
     "6_Joint":{
             "type": "sphere","radius": 0.020,
              "pos": [0.007, 0, 0.0],"rpy": [0,0,0]
     },
-    "jiazhua_Joint":[{
-                "type": "box", "half_extents": [0.05, 0.013, 0.025],
-                "pos": [0.0, 0.032, 0.01],"rpy": [0,0,0]
+    "jiazhua_Joint":{
+                "type": "box", "half_extents": [0.035, 0.025, 0.020],
+                 "pos": [0.0, 0, 0.0],"rpy": [0,0,0]
         },
-        {
-                "type": "box", "half_extents": [0.05, 0.013, 0.025],
-                "pos": [0.0, -0.032, 0.01],"rpy": [0,0,0]
-            },
-            {
-                            "type": "box", "half_extents": [0.018, 0.018, 0.018],
-                            "pos": [0.03, 0.0, 0.0],"rpy": [0,0,0], "rgba": [0, 1, 0, 0.5]
-                        }],
     "camera_Joint":{
-                    "type": "box", "half_extents": [0.026, 0.026, 0.026],
+                    "type": "box", "half_extents": [0.015, 0.015, 0.015],
                      "pos": [0.0, 0, 0.0],"rpy": [0,0,0]
             },
 
@@ -70,6 +62,7 @@ def _joints_from_base(robot, base_link):
 
     visit(base_link)
 
+    print(ordered_joint_names)
     return ordered_joint_names
 
 def _intertial(link):
