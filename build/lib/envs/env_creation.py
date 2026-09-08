@@ -37,7 +37,7 @@ def _collision_geom_size(spec:dict) -> list:
 # define main class for creating the environment:
 class MakeEnv:
     """
-    This class is for creating the environment with robot manipulato9r using the python API for MuJoCo.
+    This class is for creating the environment with robot manipulator using the python API for MuJoCo.
 
     This file is responsible -> static strucutre of joint angles and obstacle position
     """
@@ -72,6 +72,17 @@ class MakeEnv:
 
         # env settings:
         self.env_name = params["env_settings"]["name"]
+
+        # floor texture settings:
+        self.floor_texture_name     = "groundplane"
+        self.floor_texture_type     = mj.mjtTexture.mjTEXTURE_2D
+        self.floor_texture_builtin  = mujoco.mjtBuiltin.mjBUILTIN_CHECKER
+        self.floor_texture_mark     = mj.mjtMark.mjMARK_EDGE
+        self.floor_texture_markrgb  = [0.8, 0.8, 0.8]
+        self.floor_texture_rgb1     = [0.2, 0.3, 0.4]
+        self.floor_texture_rgb2     = [0.1, 0.2, 0.3]
+        self.floor_texture_width    = 300
+        self.floor_texture_height   = 300    
 
         # ground plane settings:
         self.ground_name = params["ground_settings"]["name"]
@@ -138,9 +149,8 @@ class MakeEnv:
         self.skybox_height  = params["skybox_settings"]["height"]
 
         # target settings:
-        self.target_radius = params["target_settings"]["radius"]
-        self.target_height = params["target_settings"]["height"]
-        
+        self.target_size    = params["target_settings"]["half_extents"]
+                
         # visual settings:
         self.znear       = params["visual_settings"]["znear"]
         self.zfar        = params["visual_settings"]["zfar"]
@@ -200,6 +210,24 @@ class MakeEnv:
         # add camera:
         self.spec.worldbody.add_camera(name = self.camera_name,
                                        pos = self.camera_pos)
+
+        self.spec.add_texture(
+            name    = self.floor_texture_name,
+            type    = self.floor_texture_type,
+            builtin = self.floor_texture_builtin,
+            mark    = self.floor_texture_mark,
+            markrgb = self.floor_texture_markrgb,
+            rgb1    = self.floor_texture_rgb1,
+            rgb2    = self.floor_texture_rgb2,
+            width   = self.floor_texture_width,
+            height  = self.floor_texture_height,
+        )
+
+        self.mat = self.spec.add_material(name="groundplane")
+        self.mat.textures[mj.mjtTextureRole.mjTEXROLE_RGB] = "groundplane"
+        self.mat.texuniform = True
+        self.mat.texrepeat = [5,5]
+        self.mat.reflectance = 0.2
         
         # add ground plane:
         self.spec.worldbody.add_geom(name = self.ground_name,
@@ -208,7 +236,23 @@ class MakeEnv:
                                      conaffinity = self.ground_conaffinity,
                                      pos = self.ground_pos,
                                      size = self.ground_size,
-                                     rgba = self.ground_rgba)
+                                     rgba = self.ground_rgba,
+                                     material = "groundplane")
+
+
+    def _add_collision_geoms(self, body, link_name: str, collision_spec):
+
+        specs = collision_spec if isinstance(collision_spec, list) else [collision_spec]
+        for i, col in enumerate(specs):
+            suffix = f"_{i}" if len(specs) > 1 else ""
+            body.add_geom(name=f"{link_name}_collision{suffix}",
+                      type=_COLLISION_GEOM_TYPE[col["type"]],
+                      size=_collision_geom_size(col),
+                      pos=col["pos"],
+                      euler=col["rpy"],
+                      contype=1,
+                      conaffinity=1,
+                      rgba=col.get("rgba", [1, 0, 0, 0.3]))
         
 
     def add_robot(self, robot_pos: list):
@@ -256,6 +300,12 @@ class MakeEnv:
             body = parent_body.add_body(name=jd["link_name"],
                                         pos=jd["origin_xyz"],
                                         euler=jd["origin_rpy"])
+            inert               = jd["inertial"]
+            body.mass           = inert["mass"]
+            body.ipos           = inert["origin_xyz"]
+            body.fullinertia    = [inert["ixx"], inert["iyy"], inert["izz"],
+                                inert["ixy"], inert["ixz"], inert["iyz"]]
+            
             
             body.add_joint(name=jd["joint_name"],
                            type=mj.mjtJoint.mjJNT_HINGE,
@@ -272,15 +322,7 @@ class MakeEnv:
                           conaffinity=0,
                           rgba=self.link_rgba)
             
-            col = jd["collision"]
-            body.add_geom(name=f"{jd["link_name"]}_collision",
-                          type=_COLLISION_GEOM_TYPE[col["type"]],
-                          size=_collision_geom_size(col),
-                          pos=col["pos"],
-                          euler=col["rpy"],
-                          contype=1,
-                          conaffinity=1,
-                          rgba=[1,0,0,0.3])
+            self._add_collision_geoms(body, jd["link_name"], jd["collision"])
             
             self._body_lookup[jd["link_name"]] = body
             parent_body = body
@@ -290,6 +332,12 @@ class MakeEnv:
             body = parent_body.add_body(name=fl["link_name"],
                                         pos=fl["origin_xyz"],
                                         euler=fl["origin_rpy"])
+
+            inert               = fl["inertial"]
+            body.mass           = inert["mass"]
+            body.ipos           = inert["origin_xyz"]
+            body.fullinertia    = [inert["ixx"], inert["iyy"], inert["izz"],
+                                inert["ixy"], inert["ixz"], inert["iyz"]]
             
             # visual geom: the actual mesh, no collision:
             body.add_geom(name=f"{fl['link_name']}_visual",
@@ -299,35 +347,28 @@ class MakeEnv:
                         conaffinity=0,
                         rgba=self.tool_rgba)
             
-            col = fl["collision"]
-            body.add_geom(name=f"{fl["link_name"]}_collision",
-                        type=_COLLISION_GEOM_TYPE[col["type"]],
-                        size=_collision_geom_size(col),
-                        pos=col["pos"],
-                        euler=col["rpy"],
-                        contype=1,
-                        conaffinity=1,
-                        rgba=[1,0,0,0.3])
+            self._add_collision_geoms(body, fl["link_name"], fl["collision"])
             
             self._body_lookup[fl["link_name"]] = body
 
         self.end_effector_body = self._body_lookup[self._fixed_links[-1]["link_name"]]
 
-    def add_actuators(self): 
+    def add_actuators(self, kp): 
         """
         This function add the actuators at each joint
         """
-        for name in self.joint_names:
+        for j, name in enumerate(self.joint_names):
             act = self.spec.add_actuator()
             act.name = f'act_{name}'
             act.trntype = mj.mjtTrn.mjTRN_JOINT
             act.target = name
             act.gaintype = mj.mjtGain.mjGAIN_FIXED
-            act.gainprm = [10.0, 0.0, 0.0] + [0.0]*7
+            act.gainprm  = [kp, 0.0, 0.0] + [0.0]*7
             act.biastype = mj.mjtBias.mjBIAS_AFFINE
-            act.biasprm = [0.0, -10.0, 0.0] + [0.0]*7
-            act.ctrlrange = [-self.qdot_limit, self.qdot_limit]
-            act.ctrllimited = True            
+            act.biasprm  = [0.0, -kp, -2*np.sqrt(kp)] + [0.0]*7
+            act.ctrlrange = [self.q_min[j], self.q_max[j]]
+            act.ctrllimited = True
+            
         
 
     def add_sensors(self):
@@ -342,7 +383,7 @@ class MakeEnv:
             [0:6] jointpos - q for joints 1-6 (rads)
             [6:12] jointvel - qdot for joints 1-6 (rads/s)
             [12:15] framepos - EE Cartesian position (m)
-            [15:18] framequat - EE orientation quarternion (w,x,y,z)
+            [15:19] framequat - EE orientation quarternion (w,x,y,z)
         """
         # joint position sensors (one per revolute joint):
         for jd in self._joint_data:
@@ -365,14 +406,14 @@ class MakeEnv:
         s.name = "ee_pos"
         s.type = mj.mjtSensor.mjSENS_FRAMEPOS
         s.objtype = mj.mjtObj.mjOBJ_BODY
-        s.objname = self._joint_data[-1]['link_name']
+        s.objname = self._fixed_links[-2]['link_name'] #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
 
         # end-effector orientation (quarternion)
         s = self.spec.add_sensor()
         s.name = "ee_quat"
         s.type = mj.mjtSensor.mjSENS_FRAMEQUAT
         s.objtype = mj.mjtObj.mjOBJ_BODY
-        s.objname = self._joint_data[-1]['link_name']  
+        s.objname = self._fixed_links[-2]['link_name']  #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
 
     def add_obstacle(self, obs_pos:list):
         """
@@ -420,8 +461,8 @@ class MakeEnv:
                                                    pos= target_pos)
         
         self.target.add_geom(name="target_geom",
-                             type=mj.mjtGeom.mjGEOM_SPHERE,
-                             size= self.target_radius,
+                             type=mj.mjtGeom.mjGEOM_BOX,
+                             size= self.target_size,
                              contype=0,
                              conaffinity=0,
                              rgba=[0.0,1.0,0.0,0.6]
@@ -451,13 +492,13 @@ class MakeEnv:
         self.add_robot(robot_pos = [robot_pos[0], robot_pos[1], self.robot_footprint_height])
 
         # add actuators:
-        self.add_actuators()
+        self.add_actuators(50.0)
 
         # add sensors:
         self.add_sensors()
 
         # add target:
-        self.add_target(target_pos = [target_pos[0], target_pos[1], self.target_height])
+        self.add_target(target_pos = [target_pos[0], target_pos[1], target_pos[2]])
 
         # add obstalces:
         n_obstacles = len(obs_pos)

@@ -66,6 +66,12 @@ class Manipulation(gym.Env):
         with open (json_path) as f:
             params = json.load(f)
 
+        # Extracting Link names from params file
+        self.link_names = [entry.get("link_name") for entry in (*params["robot_settings"]["revolute_joints"],  *params["robot_settings"]["fixed_links"],)]
+
+        self._geom_fromto = np.zeros(6, dtype=np.float64)
+        self._geom_distmax = 0.01
+
 
         self.LINK_SEGMENTS = [
             ("1_Link", "2_Link", 0.070),
@@ -77,6 +83,8 @@ class Manipulation(gym.Env):
         ]
 
         self.target_exclude_last_n = 1
+
+        # Target Settings
         self.target_size = params["target_settings"]["half_extents"][0]
         self.quat_thershold = params["reward_settings"].get("quat_threshold", 0.15)
             
@@ -87,7 +95,6 @@ class Manipulation(gym.Env):
         self.is_eval            = is_eval
         self.n_obstacles        = n_obstacles
         self.max_episode_steps  = max_episode_steps
-
 
 
         self._qdot_norm_prev = 0.0
@@ -254,9 +261,12 @@ class Manipulation(gym.Env):
 
         ## EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
+        gripper_col = self.model.geom("jiazhua_Link_collision_2").id
+        ee_pos1 = self.data.geom_xpos[gripper_col]
 
         ## EE pose quat from sensors
         ee_quat = sd[self._ee_quat_slice]
+        ee_quat1 = self.data.geom_xmat[gripper_col]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
@@ -266,6 +276,7 @@ class Manipulation(gym.Env):
 
         # Cartesian Position Error
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
+        pos_error1 = (tgt_pos - ee_pos1).astype(np.float32)
 
         #Quat Position Error
         R_des = self.quat_to_rot(tgt_quat)
@@ -279,7 +290,7 @@ class Manipulation(gym.Env):
 
         self.nearest_target_collision = min(self._compute_link_target_distances())
 
-        state = np.concatenate([pos_error, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
+        state = np.concatenate([pos_error1, quat_error, q, qdot, [self.nearest_obstacle]]).astype(np.float32)
     
         return state
     
@@ -317,7 +328,6 @@ class Manipulation(gym.Env):
                         [self.data.xpos[self.model.body(f"obstacle_{i}").id] for i in range(1, self.n_obstacles + 1)],
                         key=lambda pos:np.linalg.norm(pos-ee_pos)
                         ).copy()
-            print(T_obs)
         else:
             T_obs = 0
         qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)
@@ -334,17 +344,17 @@ class Manipulation(gym.Env):
         d_quat = float(np.linalg.norm(quat_err))
 
         goal_cond = (d_pos < self.pos_threshold) and (d_quat < self.quat_threshold)
-        target_collision_cond = self.nearest_target_collision < self.collision_thresh
+
         obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh 
-        collision_cond = target_collision_cond or obstacle_collision_cond
-        term = goal_cond or collision_cond
+
+        term = goal_cond or obstacle_collision_cond
 
         self.step_count += 1
         truncated = self.step_count >= self.max_episode_steps
 
         if goal_cond:
             rew = self.rew_target_scale
-        elif collision_cond:
+        elif obstacle_collision_cond:
             rew = self.rew_collision_scale
         else:
             rew_dist = (self.d_pos_last - d_pos) * self.rew_dist_scale
@@ -354,7 +364,6 @@ class Manipulation(gym.Env):
         info = {}
         if term:
             info["is_success"] = bool(goal_cond)
-            info["target_collision"]  = bool(target_collision_cond)
             info["obstacle_collision"] = bool(obstacle_collision_cond)
 
         self.d_pos_last = d_pos
@@ -505,18 +514,55 @@ class Manipulation(gym.Env):
         R = C1*r1 + C2*r2 + C3*r3 + C4*r4 + C5*r5
         return R
 
+    def _body_geom_ids(self, body_name:str) -> list[int]:
+        body_id = self.model.body(body_name).id
+        start   = self.model.body_geomadr[body_id]
+        num     = self.model.body_geomnum[body_id]
+        return list(range(start, start+num))
+
+    def _min_geom_clearance(self, link_body_names, target_body_names) -> np.ndarray:
+        target_geom_ids = []
+        for tb in target_body_names:
+            target_geom_ids.extend(self._body_geom_ids(tb))
+        g_hat = np.full(len(link_body_names), self._geom_distmax, dtype=np.float64)
+        for idx, body_name in enumerate(link_body_names):
+            link_geom_ids = self._body_geom_ids(body_name)
+            min_dist = self._geom_distmax
+            for gl in link_geom_ids:
+                for gt in target_geom_ids:
+                    d = mj.mj_geomDistance(
+                        self.model, self.data, gl, gt,
+                        self._geom_distmax, self._geom_fromto
+                    )
+                    if d < min_dist:
+                        min_dist = d
+            g_hat[idx] = min_dist
+        return g_hat
+    
+        
     def _min_link_clearance(self, targets_with_radii, exclude_last_n=0):
-        segments = self.LINK_SEGMENTS[:len(self.LINK_SEGMENTS) - exclude_last_n]
-        g_hat = np.full(len(segments), np.inf)
-        for idx, (b_start, b_end, diameter) in enumerate(segments):
+        names = self.link_names[: len(self.link_names) - exclude_last_n]
+        n_segments = len(names) - 1
+        g_hat = np.full(n_segments, np.inf)
+
+        for idx in range(n_segments):
+            b_start, b_end = names[idx], names[idx + 1]
             T1 = self.data.xpos[self.model.body(b_start).id].copy()
             T2 = self.data.xpos[self.model.body(b_end).id].copy()
+            diameter = self._link_diameter(b_end)
             min_dist = np.inf
             for T, r in targets_with_radii:
                 d = self._segment_sphere_distance(T1, T2, T, diameter, r)
                 min_dist = min(min_dist, d)
             g_hat[idx] = min_dist
         return g_hat
+
+    def _link_diameter(self, body_name: str) -> float:
+        geom_ids = self._body_geom_ids(body_name)
+        if not geom_ids:
+            return 0.0
+        radius = max(self.model.geom_size[g][0] for g in geom_ids)
+        return 2.0*radius
 
 
     def _compute_link_obstacle_distances(self) -> np.ndarray:
@@ -528,9 +574,9 @@ class Manipulation(gym.Env):
         Obstacle geometry: sphere with center T and radius r
         """
 
-        obstacles = [(self.data.xpos[self.model.body(f"obstacle_{i}").id].copy(), self.obstacle_radius)  for i in range(1, self.n_obstacles + 1) ]
+        obstacles_target = [(self.data.xpos[self.model.body(f"obstacle_{i}").id].copy(), self.obstacle_radius)  for i in range(1, self.n_obstacles + 1) ]
 
-        return self._min_link_clearance(obstacles, exclude_last_n=0)
+        return self._min_link_clearance(obstacles_target, exclude_last_n=0)
 
     def _compute_link_target_distances(self):
         target_pos = self.data.xpos[self.target_body_id].copy()

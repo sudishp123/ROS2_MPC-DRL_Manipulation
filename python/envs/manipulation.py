@@ -343,18 +343,35 @@ class Manipulation(gym.Env):
 
         d_quat = float(np.linalg.norm(quat_err))
 
-        goal_cond = (d_pos < self.pos_threshold) and (d_quat < self.quat_threshold)
-        target_collision_cond = self.nearest_target_collision < self.collision_thresh
-        obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh 
-        collision_cond = target_collision_cond or obstacle_collision_cond
-        term = goal_cond or collision_cond
+        gripper_col = self.model.geom("jiazhua_Link_collision_2").id
+
+        R_box = self.data.geom_xmat[gripper_col].reshape(3,3)
+        box_pos = self.data.geom_xpos[gripper_col]
+        box_half = self.model.geom_size[gripper_col]
+
+        tgt_pos = self.data.xpos[self.target_body_id]
+        local_err = R_box.T @ (tgt_pos - box_pos)
+        margin = box_half - self.target_size
+        contained = bool(np.all(np.abs(local_err) < margin))
+
+
+        goal_cond = contained 
+
+        self.nearest_target_body = min(self._compute_target_body_clearance())
+
+        target_collision_cond = self.nearest_target_body < 0.0
+        print(f"Live Target Clearance: {self.nearest_target_body}")
+
+        obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh
+
+        term = goal_cond or obstacle_collision_cond or target_collision_cond
 
         self.step_count += 1
         truncated = self.step_count >= self.max_episode_steps
 
         if goal_cond:
             rew = self.rew_target_scale
-        elif collision_cond:
+        elif obstacle_collision_cond:
             rew = self.rew_collision_scale
         else:
             rew_dist = (self.d_pos_last - d_pos) * self.rew_dist_scale
@@ -364,8 +381,8 @@ class Manipulation(gym.Env):
         info = {}
         if term:
             info["is_success"] = bool(goal_cond)
-            info["target_collision"]  = bool(target_collision_cond)
             info["obstacle_collision"] = bool(obstacle_collision_cond)
+            info["target_collision"] = bool(target_collision_cond)
 
         self.d_pos_last = d_pos
         self.action_last = action
@@ -521,13 +538,14 @@ class Manipulation(gym.Env):
         num     = self.model.body_geomnum[body_id]
         return list(range(start, start+num))
 
-    def _min_geom_clearance(self, link_body_names, target_body_names) -> np.ndarray:
+    def _min_geom_clearance(self, link_body_names, target_body_names, exclude_geom_ids = None) -> np.ndarray:
+        exclude_geom_ids = exclude_geom_ids or set()
         target_geom_ids = []
         for tb in target_body_names:
             target_geom_ids.extend(self._body_geom_ids(tb))
         g_hat = np.full(len(link_body_names), self._geom_distmax, dtype=np.float64)
         for idx, body_name in enumerate(link_body_names):
-            link_geom_ids = self._body_geom_ids(body_name)
+            link_geom_ids = [g for g in self._body_geom_ids(body_name) if g not in exclude_geom_ids]
             min_dist = self._geom_distmax
             for gl in link_geom_ids:
                 for gt in target_geom_ids:
@@ -539,6 +557,10 @@ class Manipulation(gym.Env):
                         min_dist = d
             g_hat[idx] = min_dist
         return g_hat
+
+    def _compute_target_body_clearance(self):
+        green_box_id = self.model.geom("jiazhua_Link_collision_2").id
+        return self._min_geom_clearance(self.link_names, ["target"], exclude_geom_ids={green_box_id})
     
         
     def _min_link_clearance(self, targets_with_radii, exclude_last_n=0):
