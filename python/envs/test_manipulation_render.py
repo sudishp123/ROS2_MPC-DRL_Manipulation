@@ -9,7 +9,6 @@ env = Manipulation(
 )
 
 obs, info = env.reset()
-print("obs shape:", obs.shape, "action space", env.action_space)
 
 glfw.init()
 
