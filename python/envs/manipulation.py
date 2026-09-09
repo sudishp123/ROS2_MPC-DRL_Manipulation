@@ -103,7 +103,8 @@ class Manipulation(gym.Env):
         # thresholds
         self.pos_threshold    = params["reward_settings"]["pos_threshold"]
         self.quat_threshold    = params["reward_settings"]["quat_threshold"]
-        self.collision_thresh = params["obstacle_settings"]["allowance"]
+        self.obstacle_collision_thresh = params["obstacle_settings"]["allowance"]
+        self.target_collision_thresh = params["target_settings"]["collision_threshold"]
         self.d_safe           = params["reward_settings"]["safe_distance"]
         
         # episode counters
@@ -146,8 +147,8 @@ class Manipulation(gym.Env):
         self._qdot_slice        = slice(6, 12)
         self._ee_pos_slice      = slice(12, 15)
         self._ee_quat_slice     = slice(15, 19)
-        self._grasp_pos_slice   = slice(19, 21)
-        self._grasp_pos_slice   = slice(21, 25)
+        self._grasp_pos_slice   = slice(19, 22)
+        self._grasp_quat_slice   = slice(22, 26)
 
         # spaces
         self._set_action_space()
@@ -253,15 +254,15 @@ class Manipulation(gym.Env):
 
         # EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
-        gripper_col = self.model.geom("grasp_zone").id
-        ee_pos1 = self.data.geom_xpos[gripper_col]
 
-        # EE pose quat from sensors
+        # EE quat from sensors
         ee_quat = sd[self._ee_quat_slice]
-        ee_quat1 = self.data.geom_xmat[gripper_col]
 
-        # Grasp Zone from sensors
+        # Grasp Zone pose from sensors
         gripper_pos = sd[self._grasp_pos_slice]
+
+        # Grasp Zone Quat from sensors
+        gripper_quat = sd[self._grasp_quat_slice]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
@@ -271,11 +272,11 @@ class Manipulation(gym.Env):
 
         # Cartesian Position Error
         pos_error = (tgt_pos - ee_pos).astype(np.float32)
-        pos_error1 = (tgt_pos - ee_pos1).astype(np.float32)
+        pos_error1 = (tgt_pos - gripper_pos).astype(np.float32)
 
         #Quat Position Error
         R_des = self.quat_to_rot(tgt_quat)
-        R_actual = self.quat_to_rot(ee_quat)
+        R_actual = self.quat_to_rot(gripper_quat)
         n_a, s_a, a_a = R_actual[:, 0], R_actual[:, 1], R_actual[:,2]
         n_d, s_d, a_d = R_des[:,0], R_des[:,1], R_des[:,2]
         quat_error = (0.5 * (np.cross(n_a,n_d) + np.cross(s_a, s_d) + np.cross(a_a, a_d))).astype(np.float32)
@@ -354,10 +355,9 @@ class Manipulation(gym.Env):
 
         self.nearest_target_body = min(self._compute_target_body_clearance())
 
-        target_collision_cond = self.nearest_target_body < 0.0
-        print(f"Live Target Clearance: {self.nearest_target_body}")
+        target_collision_cond = self.nearest_target_body < self.target_collision_thresh
 
-        obstacle_collision_cond = self.nearest_obstacle < self.collision_thresh
+        obstacle_collision_cond = self.nearest_obstacle < self.obstacle_collision_thresh
 
         term = goal_cond or obstacle_collision_cond or target_collision_cond
 
