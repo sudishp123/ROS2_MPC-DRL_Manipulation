@@ -40,7 +40,7 @@ COLLISION_OVERRIDES = {
             },
             {
                             "type": "box", "half_extents": [0.018, 0.018, 0.018],
-                            "pos": [0.03, 0.0, 0.0],"rpy": [0,0,0], "rgba": [0, 1, 0, 0.5]
+                            "pos": [0.03, 0.0, 0.0],"rpy": [0,0,0], "rgba": [0, 1, 0, 0.5], "name": "grasp_zone"
                         }],
     "camera_Joint":{
                     "type": "box", "half_extents": [0.026, 0.026, 0.026],

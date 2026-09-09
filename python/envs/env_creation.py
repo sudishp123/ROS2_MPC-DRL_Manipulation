@@ -245,7 +245,8 @@ class MakeEnv:
         specs = collision_spec if isinstance(collision_spec, list) else [collision_spec]
         for i, col in enumerate(specs):
             suffix = f"_{i}" if len(specs) > 1 else ""
-            body.add_geom(name=f"{link_name}_collision{suffix}",
+            geom_name = col.get("name", f"{link_name}_collision{suffix}")
+            body.add_geom(name= geom_name,
                       type=_COLLISION_GEOM_TYPE[col["type"]],
                       size=_collision_geom_size(col),
                       pos=col["pos"],
@@ -401,12 +402,13 @@ class MakeEnv:
             s.objtype = mj.mjtObj.mjOBJ_JOINT
             s.objname = jd['joint_name']
 
+
         # end-effector Cartesian Position
         s = self.spec.add_sensor()
         s.name = "ee_pos"
         s.type = mj.mjtSensor.mjSENS_FRAMEPOS
         s.objtype = mj.mjtObj.mjOBJ_BODY
-        s.objname = self._fixed_links[-2]['link_name'] #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
+        s.objname = self._fixed_links[-2]['link_name']  #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
 
         # end-effector orientation (quarternion)
         s = self.spec.add_sensor()
@@ -414,6 +416,20 @@ class MakeEnv:
         s.type = mj.mjtSensor.mjSENS_FRAMEQUAT
         s.objtype = mj.mjtObj.mjOBJ_BODY
         s.objname = self._fixed_links[-2]['link_name']  #Change [-2] to [-1] if there is no other link attached to gripper (like camera)
+
+        # Grasp Zone (green box) Cartesian Position
+        s = self.spec.add_sensor()
+        s.name = "grasp_pos"
+        s.type = mj.mjtSensor.mjSENS_FRAMEPOS
+        s.objtype = mj.mjtObj.mjOBJ_GEOM
+        s.objname = "grasp_zone"
+
+        # Grasp Zone (green box) orientation (quarternion)
+        s = self.spec.add_sensor()
+        s.name = "grasp_quat"
+        s.type = mj.mjtSensor.mjSENS_FRAMEQUAT
+        s.objtype = mj.mjtObj.mjOBJ_GEOM
+        s.objname = "grasp_zone"
 
     def add_obstacle(self, obs_pos:list):
         """
@@ -541,4 +557,3 @@ class MakeEnv:
                 self.viewer.sync()
 
 
-        

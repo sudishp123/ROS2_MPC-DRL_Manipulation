@@ -72,16 +72,6 @@ class Manipulation(gym.Env):
         self._geom_fromto = np.zeros(6, dtype=np.float64)
         self._geom_distmax = 0.01
 
-
-        self.LINK_SEGMENTS = [
-            ("1_Link", "2_Link", 0.070),
-            ("2_Link", "3_Link", 0.060),
-            ("3_Link", "4_Link", 0.056),
-            ("4_Link", "5_Link", 0.050),
-            ("5_Link", "6_Link", 0.040),
-            ("6_Link", "jiazhua_Link", 0.040),
-        ]
-
         self.target_exclude_last_n = 1
 
         # Target Settings
@@ -152,10 +142,12 @@ class Manipulation(gym.Env):
         self.joint_ids      = [self.model.joint]
 
         # sensor layout set by add_sensors():
-        self._q_slice       = slice(0,6)
-        self._qdot_slice    = slice(6, 12)
-        self._ee_pos_slice  = slice(12, 15)
-        self._ee_quat_slice = slice(15, 19)
+        self._q_slice           = slice(0,6)
+        self._qdot_slice        = slice(6, 12)
+        self._ee_pos_slice      = slice(12, 15)
+        self._ee_quat_slice     = slice(15, 19)
+        self._grasp_pos_slice   = slice(19, 21)
+        self._grasp_pos_slice   = slice(21, 25)
 
         # spaces
         self._set_action_space()
@@ -259,14 +251,17 @@ class Manipulation(gym.Env):
         q = sd[self._q_slice].astype(np.float32)
         qdot = sd[self._qdot_slice].astype(np.float32)
 
-        ## EE pose from sensors
+        # EE pose from sensors
         ee_pos = sd[self._ee_pos_slice]
-        gripper_col = self.model.geom("jiazhua_Link_collision_2").id
+        gripper_col = self.model.geom("grasp_zone").id
         ee_pos1 = self.data.geom_xpos[gripper_col]
 
-        ## EE pose quat from sensors
+        # EE pose quat from sensors
         ee_quat = sd[self._ee_quat_slice]
         ee_quat1 = self.data.geom_xmat[gripper_col]
+
+        # Grasp Zone from sensors
+        gripper_pos = sd[self._grasp_pos_slice]
         
         # target position
         tgt_pos = self.data.xpos[self.target_body_id]
@@ -343,7 +338,7 @@ class Manipulation(gym.Env):
 
         d_quat = float(np.linalg.norm(quat_err))
 
-        gripper_col = self.model.geom("jiazhua_Link_collision_2").id
+        gripper_col = self.model.geom("grasp_zone").id
 
         R_box = self.data.geom_xmat[gripper_col].reshape(3,3)
         box_pos = self.data.geom_xpos[gripper_col]
@@ -355,7 +350,7 @@ class Manipulation(gym.Env):
         contained = bool(np.all(np.abs(local_err) < margin))
 
 
-        goal_cond = contained 
+        goal_cond = contained and (d_quat < self.quat_thershold) 
 
         self.nearest_target_body = min(self._compute_target_body_clearance())
 
@@ -559,7 +554,7 @@ class Manipulation(gym.Env):
         return g_hat
 
     def _compute_target_body_clearance(self):
-        green_box_id = self.model.geom("jiazhua_Link_collision_2").id
+        green_box_id = self.model.geom("grasp_zone").id
         return self._min_geom_clearance(self.link_names, ["target"], exclude_geom_ids={green_box_id})
     
         

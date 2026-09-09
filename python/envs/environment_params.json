@@ -526,7 +526,8 @@
                             1,
                             0,
                             0.5
-                        ]
+                        ],
+                        "name": "grasp_zone"
                     }
                 ],
                 "inertial": {
