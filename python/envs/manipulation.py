@@ -47,7 +47,7 @@ class Manipulation(gym.Env):
                  reward_scale_options: dict[str, float] | None = None,
                  randomization_options: dict[str,float] | None = None,
                  is_eval: bool = False,
-                 n_obstacles: int = 3,
+                 obstacle_options: dict[str, int] | None = None,
                  max_episode_steps: int = 1000,
                  ):
         """
@@ -70,7 +70,7 @@ class Manipulation(gym.Env):
         self.link_names = [entry.get("link_name") for entry in (*params["robot_settings"]["revolute_joints"],  *params["robot_settings"]["fixed_links"],)]
 
         self._geom_fromto = np.zeros(6, dtype=np.float64)
-        self._geom_distmax = 0.01
+        self._geom_distmax = 0.5
 
         self.target_exclude_last_n = 1
 
@@ -83,14 +83,16 @@ class Manipulation(gym.Env):
         self.width              = width
         self.height             = height
         self.is_eval            = is_eval
-        self.n_obstacles        = n_obstacles
         self.max_episode_steps  = max_episode_steps
 
 
         self._qdot_norm_prev = 0.0
         self.step_count = 0
 
+        # Obstacle settings
         self.obstacle_radius = params["obstacle_settings"]["size_high"]
+        obsettings           = obstacle_options
+        self.n_obstacles     = obsettings.get("n_obstacles", 3)
 
         # reward scales
         rs                          = reward_scale_options or {}
@@ -109,6 +111,8 @@ class Manipulation(gym.Env):
         
         # episode counters
         self.episode_counter    = 0
+
+        # randomization options
         rand                    = randomization_options or {}
         self.randomization_freq = rand.get("randomization_freq", 1)
         self.reset_randomize    = False
@@ -190,10 +194,10 @@ class Manipulation(gym.Env):
         """
         theta_s_max = 10000.0
 
-        self.action_low = np.zeros(15, dtype=np.float32)
-        self.action_high = np.ones(15, dtype=np.float32)
+        self.action_low = np.zeros(10, dtype=np.float32)
+        self.action_high = np.ones(10, dtype=np.float32)
 
-        self.action_high[0:3] = theta_s_max
+        self.action_high[0:6] = theta_s_max
 
         self.action_space = gym.spaces.Box(
             low=self.action_low, high=self.action_high, dtype=np.float32
@@ -204,13 +208,15 @@ class Manipulation(gym.Env):
         """
         Observation Layout:
             [0:3] -> Pos error
-            [3:9] -> Joint Positions q
-            [9: 15] -> Joint Velocities qdot
-            [16] -> nearest obstacle distance
+            [3: 6] -> Quat Error
+            [6:12] -> Joint Positions q
+            [12: 18] -> Joint Velocities qdot
+            [18] -> nearest obstacle distance
         """
 
         obs_states = (
             ["ex", "ey", "ez"]
+        +   ["yaw", "roll", "pitch"]
         +   [f"q{i}" for i in range(6)]
         +   [f"q_dot{i}" for i in range(6)]
         +   ["d_obs"]
@@ -226,23 +232,21 @@ class Manipulation(gym.Env):
         # pos error
         low[0:3] = -0.8 ; high[0:3] = 0.8
 
-
         desc = parse_robot_description("/home/sudhishp/ROS2_MPC+DRL_Manipulation/assets/jetcobot/urdf/jetcobot.urdf", "base_link", "6_Link")
 
         # joint limits from params
         j_low = desc.q_min
         j_high = desc.q_max
-        low[3:9] = j_low; high[3:9] = j_high
+        low[6:12] = j_low; high[6:12] = j_high
 
         # joint velocities
         qdot_limit = 4.0
-        low[9:15] = -qdot_limit; high[9:15] = qdot_limit
+        low[12:18] = -qdot_limit; high[12:18] = qdot_limit
 
         # obstacle distance
-        low[15] = 0.0; high[15] = 2.0
+        low[18] = 0.0; high[18] = 2.0
 
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
-
 
     # obtain observations:
     def _get_obs(self) -> np.ndarray:
@@ -317,7 +321,7 @@ class Manipulation(gym.Env):
         p_des           = self.data.xpos[self.target_body_id]
         quat_des        = self.data.xquat[self.target_body_id]
         R_des           = self.quat_to_rot(quat_des)
-        ee_pos          = self.data.sensordata[self._ee_pos_slice]
+        ee_pos          = self.data.sensordata[self._grasp_pos_slice]
 
         if self.n_obstacles != 0:
             T_obs           = min(
@@ -325,7 +329,7 @@ class Manipulation(gym.Env):
                         key=lambda pos:np.linalg.norm(pos-ee_pos)
                         ).copy()
         else:
-            T_obs = 0
+            T_obs = ee_pos + np.array([1e3, 1e3, 1e3])
         qdot_cmd, q_next, info  = self.nmpc.solve(q, p_des, T_obs, R_des)
 
         self.data.ctrl[:] = np.clip(q_next, -4.0, 4.0)
@@ -334,7 +338,6 @@ class Manipulation(gym.Env):
         nobs= self._get_obs()
         pos_err = nobs[0:3]
         quat_err = nobs[3:6]
-        # print(pos_err)
         d_pos = float(np.linalg.norm(pos_err))
 
         d_quat = float(np.linalg.norm(quat_err))
@@ -555,8 +558,10 @@ class Manipulation(gym.Env):
 
     def _compute_target_body_clearance(self):
         green_box_id = self.model.geom("grasp_zone").id
-        return self._min_geom_clearance(self.link_names, ["target"], exclude_geom_ids={green_box_id})
-    
+        g_hat = self._min_geom_clearance(self.link_names, ["target"], exclude_geom_ids={green_box_id})
+        idx = int(np.argmin(g_hat))
+        print(f"Nearest target link: {self.link_names[idx]} @ {g_hat[idx]:.4f}")
+        return g_hat    
         
     def _min_link_clearance(self, targets_with_radii, exclude_last_n=0):
         names = self.link_names[: len(self.link_names) - exclude_last_n]
@@ -591,7 +596,9 @@ class Manipulation(gym.Env):
         Link geometry: capsule approximated as line segment
         Obstacle geometry: sphere with center T and radius r
         """
-
+        if self.n_obstacles == 0:
+            return np.array([2.0], dtype = np.float64)
+            
         obstacles_target = [(self.data.xpos[self.model.body(f"obstacle_{i}").id].copy(), self.obstacle_radius)  for i in range(1, self.n_obstacles + 1) ]
 
         return self._min_link_clearance(obstacles_target, exclude_last_n=0)
@@ -633,6 +640,15 @@ class Manipulation(gym.Env):
             d1 = np.linalg.norm(T-T1)
             d2 = np.linalg.norm(T-T2)
             return float(min(d1, d2) - D/2.0 - r)
+
+ENV_ID = "Manipulation-v0"
+
+if ENV_ID not in gym.envs.registry:
+    register(
+        id=ENV_ID,
+        entry_point = "envs.manipulation:Manipulation",
+        max_episode_steps = 1_000,
+    )
         
 
 

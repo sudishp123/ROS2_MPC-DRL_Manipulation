@@ -4,7 +4,7 @@ from envs.manipulation import Manipulation
 
 env = Manipulation(
     render_mode="human",
-    n_obstacles=2,
+    n_obstacles=0,
     max_episode_steps=2000,
 )
 
